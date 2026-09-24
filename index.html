@@ -99,7 +99,7 @@ let time = 0;
 let gameOver = false;
 let coinCount = 0;
 const START_LIVES = 3;
-const INVUL_TIME = 3; // segundos piscando depois de bater
+const INVUL_TIME = 1.5; // segundos piscando depois de bater
 let lives = START_LIVES;
 let invulnerable = 0; // segundos restantes de piscada/proteção
 
@@ -229,7 +229,7 @@ function hitObstacle(type) {
     loseGame(type);
     return;
   }
-  invulnerable = INVUL_TIME; // pisca e fica protegido por 3 segundos
+  invulnerable = INVUL_TIME; // pisca e fica protegido por 1,5 segundo
 }
 
 function loseGame(type) {
