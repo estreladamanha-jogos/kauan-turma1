@@ -108,7 +108,7 @@ function hash(n) { const x = Math.sin(n*127.1 + 311.7) * 43758.5453; return x - 
 const player = { lane: 1, targetLane: 1, jumpY: 0, vy: 0, onGround: true };
 const GRAVITY = 2300;
 const JUMP_SPEED = 800;
-const JUMP_CLEAR = 55; // altura mínima pra passar voando por cima da pedra
+const JUMP_CLEAR = 75; // altura mínima pra passar voando por cima da pedra (maior agora que a pedra cresceu)
 
 // ---------- Moedas ----------
 let coins = [];
@@ -186,7 +186,7 @@ function update(dt) {
     }
   }
 
-  const HIT_WINDOW = 0.35;
+  const HIT_WINDOW = 0.45; // um pouco maior, porque os obstáculos ficaram maiores
   for (const o of obstacles) {
     if (o.hit) continue;
     const d = o.d - distance;
@@ -451,8 +451,8 @@ function drawObstacle(o) {
   const s = sc(d), x = laneX(o.lane, d), y = gy(d);
 
   if (o.type === 'pedra') {
-    // pedra baixinha, dá pra pular por cima
-    const r = 22*s;
+    // pedra grande, dá pra pular por cima
+    const r = 34*s;
     ctx.save();
     ctx.globalAlpha = 0.25; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.ellipse(x, y + 3*s, r*0.95, r*0.28, 0, 0, Math.PI*2); ctx.fill();
@@ -467,7 +467,7 @@ function drawObstacle(o) {
     ctx.restore();
   } else {
     // tronco caído atravessado na pista, só dá pra desviar
-    const w = LANE_W * 0.86 * s, h = 30*s;
+    const w = LANE_W * 0.95 * s, h = 46*s;
     ctx.save();
     ctx.globalAlpha = 0.3; ctx.fillStyle = '#000';
     ctx.beginPath(); ctx.ellipse(x, y + 4*s, w*0.52, 9*s, 0, 0, Math.PI*2); ctx.fill();
