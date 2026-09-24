@@ -55,6 +55,7 @@
     <div class="stat">🪙 <b id="coinVal">0</b></div>
     <div id="progress"><div id="progressFill"></div><div id="progressIcon">🛹</div></div>
     <div class="stat">🏁 <b id="pctVal">0</b>%</div>
+    <div class="stat" id="livesVal">❤️❤️❤️</div>
   </div>
 
   <canvas id="game" width="900" height="500"></canvas>
@@ -97,6 +98,10 @@ let distance = 0;
 let time = 0;
 let gameOver = false;
 let coinCount = 0;
+const START_LIVES = 3;
+const INVUL_TIME = 3; // segundos piscando depois de bater
+let lives = START_LIVES;
+let invulnerable = 0; // segundos restantes de piscada/proteção
 
 // ---------- Perspectiva ----------
 function sc(d) { return FOCAL / (FOCAL + Math.max(d, -FOCAL*0.6)); }
@@ -176,6 +181,8 @@ function update(dt) {
     if (player.jumpY <= 0) { player.jumpY = 0; player.vy = 0; player.onGround = true; }
   }
 
+  if (invulnerable > 0) invulnerable = Math.max(0, invulnerable - dt);
+
   for (const c of coins) {
     if (c.taken) continue;
     const d = c.d - distance;
@@ -193,7 +200,7 @@ function update(dt) {
     if (Math.abs(d) < HIT_WINDOW && Math.abs(player.lane - o.lane) < 0.6) {
       o.hit = true;
       const passouVoando = o.type === 'pedra' && player.jumpY > JUMP_CLEAR;
-      if (!passouVoando) { loseGame(o.type); break; }
+      if (!passouVoando && invulnerable <= 0) { hitObstacle(o.type); break; }
     }
   }
 
@@ -211,13 +218,27 @@ function winGame() {
   document.getElementById('overlay').classList.add('show');
 }
 
+function updateLivesDisplay() {
+  document.getElementById('livesVal').textContent = '❤️'.repeat(lives) + '🖤'.repeat(START_LIVES - lives);
+}
+
+function hitObstacle(type) {
+  lives--;
+  updateLivesDisplay();
+  if (lives <= 0) {
+    loseGame(type);
+    return;
+  }
+  invulnerable = INVUL_TIME; // pisca e fica protegido por 3 segundos
+}
+
 function loseGame(type) {
   gameOver = true;
   document.getElementById('overlayTitle').textContent = '💥 GAME OVER';
   const msg = type === 'tronco'
     ? 'Você bateu no tronco! Tronco não dá pra pular, só dá pra desviar.'
     : 'Você bateu na pedra! Da próxima, pula na hora certa pra passar por cima.';
-  document.getElementById('overlayText').textContent = `${msg} Você juntou ${coinCount} moedas.`;
+  document.getElementById('overlayText').textContent = `${msg} Suas 3 vidas acabaram. Você juntou ${coinCount} moedas.`;
   document.getElementById('overlay').classList.add('show');
 }
 
@@ -225,12 +246,15 @@ function restart() {
   speed = START_SPEED;
   distance = 0; time = 0;
   coinCount = 0;
+  lives = START_LIVES;
+  invulnerable = 0;
   gameOver = false;
   player.lane = player.targetLane = 1;
   player.jumpY = 0; player.vy = 0; player.onGround = true;
   buildCoins();
   buildObstacles();
   document.getElementById('coinVal').textContent = 0;
+  updateLivesDisplay();
   document.getElementById('overlay').classList.remove('show');
 }
 
@@ -516,6 +540,9 @@ function drawFinish() {
 }
 
 function drawPlayer() {
+  // enquanto tá invencível, pisca (some e aparece 6x por segundo)
+  if (invulnerable > 0 && Math.floor(invulnerable * 6) % 2 === 0) return;
+
   const x = laneX(player.lane, 0);
   const jy = player.jumpY;
   const bob = player.onGround ? Math.sin(time*16) * 1.6 : 0;
