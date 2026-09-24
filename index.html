@@ -62,7 +62,7 @@
 
   <canvas id="game" width="900" height="500"></canvas>
 
-  <div id="hint">← → ou arraste · ↑/ESPAÇO ou toque pra pular · não deixa o cavalo te alcançar 🐴</div>
+  <div id="hint">← → ou arraste pra trocar de pista · se o cavalo entrar na sua pista, sai da frente dele! 🐴</div>
 
   <div id="overlay">
     <h2 id="overlayTitle">🏁 CHEGOU!</h2>
@@ -115,6 +115,7 @@ const HORSE_COIN_BONUS = 0.15; // folga que você ganha por moeda
 const HORSE_SAFE_D = -0.4;     // posição (d) dele quando está longe
 const HORSE_DANGER_D = -2.4;   // posição (d) dele quando tá quase alcançando
 let horseGap = HORSE_START_GAP;
+let horseLane = 1; // pista onde o cavalo está (ele muda de pista pra tentar te alcançar)
 
 // ---------- Perspectiva ----------
 function sc(d) { return FOCAL / (FOCAL + Math.max(d, -FOCAL*0.6)); }
@@ -232,10 +233,14 @@ function update(dt) {
 
   if (invulnerable > 0) invulnerable = Math.max(0, invulnerable - dt);
 
-  // o cavalo fecha a distância sozinho — se alcançar, acabou o jogo
+  // o cavalo fecha a distância sozinho e tenta ir pra sua pista (mais devagar que você)
   horseGap = Math.min(HORSE_MAX_GAP, horseGap - HORSE_CLOSE_RATE * dt);
+  horseLane += (player.lane - horseLane) * Math.min(1, dt * 3);
   updateHorseDisplay();
-  if (horseGap <= HORSE_CATCH_GAP) { loseGame('cavalo'); return; }
+  if (horseGap <= HORSE_CATCH_GAP) {
+    if (Math.abs(horseLane - player.lane) < 0.6) { loseGame('cavalo'); return; }
+    horseGap = HORSE_CATCH_GAP + 0.05; // fica colado atrás, esperando você entrar na pista dele
+  }
 
   for (const c of coins) {
     if (c.taken) continue;
@@ -297,7 +302,10 @@ function hitObstacle(type) {
   // bater em qualquer coisa deixa o cavalo mais perto
   horseGap = Math.max(0, horseGap - HORSE_HIT_PENALTY);
   updateHorseDisplay();
-  if (horseGap <= HORSE_CATCH_GAP) { loseGame('cavalo'); return; }
+  if (horseGap <= HORSE_CATCH_GAP) {
+    if (Math.abs(horseLane - player.lane) < 0.6) { loseGame('cavalo'); return; }
+    horseGap = HORSE_CATCH_GAP + 0.05;
+  }
 
   lives--;
   updateLivesDisplay();
@@ -328,6 +336,7 @@ function restart() {
   lives = START_LIVES;
   invulnerable = 0;
   horseGap = HORSE_START_GAP;
+  horseLane = 1;
   gameOver = false;
   player.lane = player.targetLane = 1;
   player.jumpY = 0; player.vy = 0; player.onGround = true;
@@ -645,10 +654,19 @@ function drawHorse() {
   const fraction = 1 - Math.max(0, Math.min(1, (horseGap - HORSE_CATCH_GAP) / (HORSE_MAX_GAP - HORSE_CATCH_GAP)));
   const dHorse = HORSE_SAFE_D + (HORSE_DANGER_D - HORSE_SAFE_D) * fraction;
   const s = sc(dHorse);
-  const x = laneX(player.lane, dHorse); // vem correndo atrás, na mesma pista
+  const x = laneX(horseLane, dHorse); // vem correndo atrás, na pista dele
   const y = gy(dHorse);
   const scale = s * 1.55; // sempre maior que o skatista
   const gallop = Math.sin(time * 14);
+
+  // avisa quando ele tá bem perto e na mesma pista que você
+  if (fraction > 0.75 && Math.abs(horseLane - player.lane) < 0.7) {
+    ctx.save();
+    ctx.globalAlpha = 0.5 + Math.abs(Math.sin(time * 10)) * 0.5;
+    ctx.fillStyle = '#ff1a1a';
+    ctx.beginPath(); ctx.ellipse(x, y + 8*s, 42*s, 12*s, 0, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
 
   ctx.save();
   ctx.translate(x, y);
