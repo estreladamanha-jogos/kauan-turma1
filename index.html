@@ -60,7 +60,7 @@
 
   <canvas id="game" width="900" height="500"></canvas>
 
-  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · pule a pedra, desvie do tronco 🛹</div>
+  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · pule a pedra, desvie do tronco · fuja da sombra vermelha 🍾</div>
 
   <div id="overlay">
     <h2 id="overlayTitle">🏁 CHEGOU!</h2>
@@ -151,6 +151,20 @@ function buildObstacles() {
 }
 buildObstacles();
 
+// ---------- Garrafas caindo do céu (sombra vermelha avisa 1s antes) ----------
+const BOTTLE_WARN_TIME = 1; // segundos de aviso (sombra vermelha) antes de cair
+let bottles = [];
+function buildBottles() {
+  bottles = [];
+  let n = 0;
+  for (let m = 90; m < TRACK_LENGTH - 40; m += 140) {
+    const lane = Math.floor(hash(n*23 + 5) * 3);
+    bottles.push({ d: m, lane, hit: false });
+    n++;
+  }
+}
+buildBottles();
+
 // ---------- Controle ----------
 const keys = {};
 window.addEventListener('keydown', e => {
@@ -204,6 +218,16 @@ function update(dt) {
     }
   }
 
+  // garrafa: cai reto no chão, só dá pra escapar trocando de pista (pular não ajuda)
+  for (const b of bottles) {
+    if (b.hit) continue;
+    const d = b.d - distance;
+    if (Math.abs(d) < HIT_WINDOW && Math.abs(player.lane - b.lane) < 0.6) {
+      b.hit = true;
+      if (invulnerable <= 0) hitObstacle('garrafa');
+    }
+  }
+
   const pct = Math.min(100, distance / TRACK_LENGTH * 100);
   document.getElementById('progressFill').style.width = pct + '%';
   document.getElementById('progressIcon').style.left = pct + '%';
@@ -237,6 +261,8 @@ function loseGame(type) {
   document.getElementById('overlayTitle').textContent = '💥 GAME OVER';
   const msg = type === 'tronco'
     ? 'Você bateu no tronco! Tronco não dá pra pular, só dá pra desviar.'
+    : type === 'garrafa'
+    ? 'Uma garrafa caiu em cima de você! Da próxima, saia da pista assim que ver a sombra vermelha.'
     : 'Você bateu na pedra! Da próxima, pula na hora certa pra passar por cima.';
   document.getElementById('overlayText').textContent = `${msg} Suas 3 vidas acabaram. Você juntou ${coinCount} moedas.`;
   document.getElementById('overlay').classList.add('show');
@@ -253,6 +279,7 @@ function restart() {
   player.jumpY = 0; player.vy = 0; player.onGround = true;
   buildCoins();
   buildObstacles();
+  buildBottles();
   document.getElementById('coinVal').textContent = 0;
   updateLivesDisplay();
   document.getElementById('overlay').classList.remove('show');
@@ -516,6 +543,48 @@ function drawObstacle(o) {
   }
 }
 
+function drawBottle(b) {
+  if (b.hit) return;
+  const d = b.d - distance;
+  if (d < -1 || d > MAX_D) return;
+
+  const timeToImpact = d / speed; // segundos até ela cair nessa pista
+  if (timeToImpact > BOTTLE_WARN_TIME) return; // ainda não é hora de avisar
+
+  const s = sc(d), x = laneX(b.lane, d), y = gy(d);
+  const progress = 1 - Math.max(0, Math.min(1, timeToImpact / BOTTLE_WARN_TIME)); // 0 = começou o aviso · 1 = caindo agora
+
+  // sombra vermelha no chão avisando onde vai cair, pulsando
+  const pulse = 0.6 + Math.abs(Math.sin(time * 10)) * 0.4;
+  const shadowR = (16 + progress * 14) * s;
+  ctx.save();
+  ctx.globalAlpha = (0.35 + progress * 0.45) * pulse;
+  ctx.fillStyle = '#ff1a1a';
+  ctx.beginPath(); ctx.ellipse(x, y, shadowR, shadowR * 0.35, 0, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 0.9 * pulse;
+  ctx.strokeStyle = '#ff1a1a'; ctx.lineWidth = Math.max(1, 2.5*s);
+  ctx.beginPath(); ctx.ellipse(x, y, shadowR, shadowR * 0.35, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.restore();
+
+  // garrafa caindo do céu até o chão
+  const dropY = y - (1 - progress) * 240 * s;
+  ctx.save();
+  ctx.translate(x, dropY);
+  ctx.rotate(time * 6); // gira caindo
+  const gw = 10*s, gh = 26*s;
+  const g = ctx.createLinearGradient(-gw, -gh, gw, gh);
+  g.addColorStop(0, '#2ec97a'); g.addColorStop(0.5, '#1a8f52'); g.addColorStop(1, '#0f6a3a');
+  ctx.fillStyle = g; ctx.strokeStyle = '#0a4526'; ctx.lineWidth = Math.max(1, 1.5*s);
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-gw, -gh*0.3, gw*2, gh*1.1, gw*0.6); else ctx.rect(-gw, -gh*0.3, gw*2, gh*1.1);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#1a8f52';
+  ctx.fillRect(-gw*0.35, -gh, gw*0.7, gh*0.8);
+  ctx.fillStyle = 'rgba(255,255,255,.5)';
+  ctx.fillRect(-gw*0.5, -gh*0.1, gw*0.35, gh*0.7);
+  ctx.restore();
+}
+
 function drawFinish() {
   const d = TRACK_LENGTH - distance;
   if (d > MAX_D || d < -3) return;
@@ -623,6 +692,7 @@ function draw() {
   drawScenery();
   drawFinish();
   for (let i = obstacles.length - 1; i >= 0; i--) drawObstacle(obstacles[i]);
+  for (let i = bottles.length - 1; i >= 0; i--) drawBottle(bottles[i]);
   for (let i = coins.length - 1; i >= 0; i--) drawCoin(coins[i]);
   drawPlayer();
 }
