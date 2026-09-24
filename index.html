@@ -46,6 +46,7 @@
     box-shadow:0 5px 0 #8f1d38;
   }
   #overlay button:active { box-shadow:0 2px 0 #8f1d38; transform:translateY(3px); }
+  #horseVal.perto { color:#ff3b3b; }
 </style>
 </head>
 <body>
@@ -56,11 +57,12 @@
     <div id="progress"><div id="progressFill"></div><div id="progressIcon">🛹</div></div>
     <div class="stat">🏁 <b id="pctVal">0</b>%</div>
     <div class="stat" id="livesVal">❤️❤️❤️</div>
+    <div class="stat">🐴 <b id="horseVal">22</b>m</div>
   </div>
 
   <canvas id="game" width="900" height="500"></canvas>
 
-  <div id="hint">← → trocar de pista · ↑ ou ESPAÇO pular · pule a pedra, desvie do tronco · fuja da sombra vermelha 🍾</div>
+  <div id="hint">← → ou arraste · ↑/ESPAÇO ou toque pra pular · não deixa o cavalo te alcançar 🐴</div>
 
   <div id="overlay">
     <h2 id="overlayTitle">🏁 CHEGOU!</h2>
@@ -102,6 +104,17 @@ const START_LIVES = 3;
 const INVUL_TIME = 1.5; // segundos piscando depois de bater
 let lives = START_LIVES;
 let invulnerable = 0; // segundos restantes de piscada/proteção
+
+// ---------- Cavalo branco perseguindo (maior que o skatista) ----------
+const HORSE_START_GAP = 22;    // metros de distância dele no começo
+const HORSE_MAX_GAP = 30;      // não deixa afastar demais, pra manter a tensão
+const HORSE_CATCH_GAP = 3;     // se a distância cair até aqui, ele alcança
+const HORSE_CLOSE_RATE = 0.3;  // metros/segundo que ele fecha sozinho
+const HORSE_HIT_PENALTY = 5;   // quanto ele avança quando você bate em algo
+const HORSE_COIN_BONUS = 0.15; // folga que você ganha por moeda
+const HORSE_SAFE_D = -0.4;     // posição (d) dele quando está longe
+const HORSE_DANGER_D = -2.4;   // posição (d) dele quando tá quase alcançando
+let horseGap = HORSE_START_GAP;
 
 // ---------- Perspectiva ----------
 function sc(d) { return FOCAL / (FOCAL + Math.max(d, -FOCAL*0.6)); }
@@ -177,6 +190,28 @@ window.addEventListener('keydown', e => {
 });
 window.addEventListener('keyup', e => { keys[e.code] = false; });
 
+// controles por toque, pra jogar bem no celular: arrasta pros lados ou pra cima, ou só toca pra pular
+let touchStartX = null, touchStartY = null;
+canvas.addEventListener('touchstart', e => {
+  const t = e.changedTouches[0];
+  touchStartX = t.clientX; touchStartY = t.clientY;
+}, { passive: true });
+canvas.addEventListener('touchend', e => {
+  if (touchStartX === null) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touchStartX, dy = t.clientY - touchStartY;
+  const SWIPE = 28;
+  if (Math.abs(dx) > SWIPE && Math.abs(dx) > Math.abs(dy)) {
+    if (dx < 0) player.targetLane = Math.max(0, player.targetLane - 1);
+    else player.targetLane = Math.min(2, player.targetLane + 1);
+  } else if (dy < -SWIPE) {
+    tryJump();
+  } else {
+    tryJump(); // toque rápido também pula
+  }
+  touchStartX = null; touchStartY = null;
+}, { passive: true });
+
 function tryJump() {
   if (player.onGround) { player.vy = JUMP_SPEED; player.onGround = false; }
 }
@@ -197,12 +232,18 @@ function update(dt) {
 
   if (invulnerable > 0) invulnerable = Math.max(0, invulnerable - dt);
 
+  // o cavalo fecha a distância sozinho — se alcançar, acabou o jogo
+  horseGap = Math.min(HORSE_MAX_GAP, horseGap - HORSE_CLOSE_RATE * dt);
+  updateHorseDisplay();
+  if (horseGap <= HORSE_CATCH_GAP) { loseGame('cavalo'); return; }
+
   for (const c of coins) {
     if (c.taken) continue;
     const d = c.d - distance;
     if (d < 1.2 && d > -1.5 && Math.abs(player.lane - c.lane) < 0.6) {
       c.taken = true;
       coinCount++;
+      horseGap = Math.min(HORSE_MAX_GAP, horseGap + HORSE_COIN_BONUS);
       document.getElementById('coinVal').textContent = coinCount;
     }
   }
@@ -246,7 +287,18 @@ function updateLivesDisplay() {
   document.getElementById('livesVal').textContent = '❤️'.repeat(lives) + '🖤'.repeat(START_LIVES - lives);
 }
 
+function updateHorseDisplay() {
+  const el = document.getElementById('horseVal');
+  el.textContent = Math.max(0, Math.round(horseGap));
+  el.classList.toggle('perto', horseGap < 9);
+}
+
 function hitObstacle(type) {
+  // bater em qualquer coisa deixa o cavalo mais perto
+  horseGap = Math.max(0, horseGap - HORSE_HIT_PENALTY);
+  updateHorseDisplay();
+  if (horseGap <= HORSE_CATCH_GAP) { loseGame('cavalo'); return; }
+
   lives--;
   updateLivesDisplay();
   if (lives <= 0) {
@@ -258,13 +310,14 @@ function hitObstacle(type) {
 
 function loseGame(type) {
   gameOver = true;
-  document.getElementById('overlayTitle').textContent = '💥 GAME OVER';
-  const msg = type === 'tronco'
-    ? 'Você bateu no tronco! Tronco não dá pra pular, só dá pra desviar.'
-    : type === 'garrafa'
-    ? 'Uma garrafa caiu em cima de você! Da próxima, saia da pista assim que ver a sombra vermelha.'
-    : 'Você bateu na pedra! Da próxima, pula na hora certa pra passar por cima.';
-  document.getElementById('overlayText').textContent = `${msg} Suas 3 vidas acabaram. Você juntou ${coinCount} moedas.`;
+  document.getElementById('overlayTitle').textContent = type === 'cavalo' ? '🐴 O CAVALO TE ALCANÇOU!' : '💥 GAME OVER';
+  let msg;
+  if (type === 'cavalo') msg = 'O cavalo branco te alcançou! Pegue moedas e desvie de tudo pra ficar na frente dele.';
+  else if (type === 'tronco') msg = 'Você bateu no tronco! Tronco não dá pra pular, só dá pra desviar.';
+  else if (type === 'garrafa') msg = 'Uma garrafa caiu em cima de você! Da próxima, saia da pista assim que ver a sombra vermelha.';
+  else msg = 'Você bateu na pedra! Da próxima, pula na hora certa pra passar por cima.';
+  const extra = type === 'cavalo' ? '' : ' Suas 3 vidas acabaram.';
+  document.getElementById('overlayText').textContent = `${msg}${extra} Você juntou ${coinCount} moedas.`;
   document.getElementById('overlay').classList.add('show');
 }
 
@@ -274,6 +327,7 @@ function restart() {
   coinCount = 0;
   lives = START_LIVES;
   invulnerable = 0;
+  horseGap = HORSE_START_GAP;
   gameOver = false;
   player.lane = player.targetLane = 1;
   player.jumpY = 0; player.vy = 0; player.onGround = true;
@@ -282,6 +336,7 @@ function restart() {
   buildBottles();
   document.getElementById('coinVal').textContent = 0;
   updateLivesDisplay();
+  updateHorseDisplay();
   document.getElementById('overlay').classList.remove('show');
 }
 
@@ -585,6 +640,81 @@ function drawBottle(b) {
   ctx.restore();
 }
 
+function drawHorse() {
+  // 0 = longe e tranquilo · 1 = quase alcançando
+  const fraction = 1 - Math.max(0, Math.min(1, (horseGap - HORSE_CATCH_GAP) / (HORSE_MAX_GAP - HORSE_CATCH_GAP)));
+  const dHorse = HORSE_SAFE_D + (HORSE_DANGER_D - HORSE_SAFE_D) * fraction;
+  const s = sc(dHorse);
+  const x = laneX(player.lane, dHorse); // vem correndo atrás, na mesma pista
+  const y = gy(dHorse);
+  const scale = s * 1.55; // sempre maior que o skatista
+  const gallop = Math.sin(time * 14);
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // poeira levantada atrás dele
+  ctx.globalAlpha = 0.3 + Math.abs(gallop) * 0.15;
+  ctx.fillStyle = '#d8c9a3';
+  for (let i = 0; i < 3; i++) {
+    const dustX = (-40 - i*18) * scale + Math.sin(time*10 + i) * 6;
+    ctx.beginPath();
+    ctx.ellipse(dustX, -6*scale, 16*scale, 8*scale, 0, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.scale(scale, scale);
+
+  // pernas (galopando)
+  ctx.strokeStyle = '#e6e6e6'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-30, -26); ctx.lineTo(-30 + gallop*10, -2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-16, -26); ctx.lineTo(-16 - gallop*10, -2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(18, -26); ctx.lineTo(18 - gallop*10, -2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(32, -26); ctx.lineTo(32 + gallop*10, -2); ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // corpo branco
+  const bodyGrad = ctx.createLinearGradient(-40, -70, 40, -20);
+  bodyGrad.addColorStop(0, '#ffffff'); bodyGrad.addColorStop(1, '#e3e3e3');
+  ctx.fillStyle = bodyGrad; ctx.strokeStyle = '#b9b9b9'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-38, -66, 76, 46, 22); else ctx.rect(-38, -66, 76, 46);
+  ctx.fill(); ctx.stroke();
+
+  // pescoço e cabeça
+  ctx.save();
+  ctx.translate(34, -58);
+  ctx.rotate(-0.35);
+  ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#b9b9b9'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(-8, -34, 22, 46, 10); else ctx.rect(-8, -34, 22, 46);
+  ctx.fill(); ctx.stroke();
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(6, -34, 26, 16, 8); else ctx.rect(6, -34, 26, 16);
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#7a5a4a';
+  ctx.beginPath(); ctx.ellipse(26, -26, 2.6, 2, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#2b2118';
+  ctx.beginPath(); ctx.arc(6, -30, 3, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#c9c9c9'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(-6, -34); ctx.lineTo(-10, -10); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, -34); ctx.lineTo(-4, -6); ctx.stroke();
+  ctx.lineCap = 'butt';
+  ctx.restore();
+
+  // rabo
+  ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = 8; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(-38, -46);
+  ctx.quadraticCurveTo(-58 + gallop*6, -30, -50, -4);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  ctx.restore();
+  ctx.restore();
+}
+
 function drawFinish() {
   const d = TRACK_LENGTH - distance;
   if (d > MAX_D || d < -3) return;
@@ -694,6 +824,7 @@ function draw() {
   for (let i = obstacles.length - 1; i >= 0; i--) drawObstacle(obstacles[i]);
   for (let i = bottles.length - 1; i >= 0; i--) drawBottle(bottles[i]);
   for (let i = coins.length - 1; i >= 0; i--) drawCoin(coins[i]);
+  drawHorse();
   drawPlayer();
 }
 
