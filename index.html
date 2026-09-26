@@ -196,7 +196,7 @@ function spawnAmbiente(dt) {
       timers.bird = rnd(3, 6);
     }
     if (timers.tree <= 0) {
-      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1 });
+      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'arvore' });
       timers.tree = rnd(6, 9);
     }
   } else if (worldIdx === 1) { // gelo
@@ -212,6 +212,10 @@ function spawnAmbiente(dt) {
       amb.push({ tp: 'floco', x: rnd(10, W - 10), y: -20, vy: rnd(30, 55), vx: rnd(-30, 30), rot: rnd(0, 6.28), vr: rnd(-1.5, 1.5), sz: rnd(4, 8) });
       timers.flocos = rnd(.12, .28);
     }
+    if (timers.tree <= 0) {
+      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'gelopedra' });
+      timers.tree = rnd(7, 10);
+    }
   } else if (worldIdx === 2) { // vulcão
     if (timers.fire <= 0) {
       amb.push({ tp: 'faisca', x: rnd(10, W - 10), y: -10, vy: rnd(90, 160), vx: rnd(-20, 20), sz: rnd(1.5, 3.2) });
@@ -221,6 +225,10 @@ function spawnAmbiente(dt) {
       amb.push({ tp: 'foguinho', x: rnd(10, W - 10), y: -15, vy: rnd(60, 110), vx: rnd(-15, 15), fase: rnd(0, 6.28), sz: rnd(6, 11) });
       timers.flame = rnd(.25, .5);
     }
+    if (timers.tree <= 0) {
+      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'vulcaoparte' });
+      timers.tree = rnd(7, 10);
+    }
   } else if (worldIdx === 3) { // roxo
     if (timers.star <= 0) {
       amb.push({ tp: 'estrela', x: rnd(10, W - 10), y: -10, vy: rnd(50, 100), vx: rnd(-10, 10), fase: rnd(0, 6.28), sz: rnd(2, 4) });
@@ -229,6 +237,10 @@ function spawnAmbiente(dt) {
     if (timers.rocket <= 0) {
       amb.push({ tp: 'foguete', x: -30, y: rnd(80, 300), vy: -40, vx: rnd(90, 130) });
       timers.rocket = rnd(5, 9);
+    }
+    if (timers.tree <= 0) {
+      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'lua' });
+      timers.tree = rnd(8, 11);
     }
   }
 
@@ -278,18 +290,51 @@ function desenharAmbiente() {
   }
 }
 
-/* árvore gigante da floresta (parallax, decorativa) */
+/* marcos gigantes de cada mundo: árvore, pedra de gelo, rocha do vulcão, lua (parallax, decorativos) */
 function desenharArvores(dt) {
   for (const a of arvores) a.y -= vel * dt;
   arvores = arvores.filter(a => a.y > -260);
   for (const a of arvores) {
     const x = a.lado === -1 ? -10 : W + 10;
     c.save(); c.translate(x, a.y);
-    c.fillStyle = '#4a3320'; c.beginPath(); c.moveTo(-14 * a.lado, 60); c.lineTo(14 * a.lado, 60); c.lineTo(9 * a.lado, -60); c.lineTo(-9 * a.lado, -60); c.closePath(); c.fill();
-    const g = c.createRadialGradient(0, -110, 10, 0, -110, 120);
-    g.addColorStop(0, '#dff2b0'); g.addColorStop(1, '#a8d97a');
-    c.fillStyle = g; c.beginPath(); c.arc(0, -110, 110, 0, 7); c.fill();
-    c.fillStyle = 'rgba(255,255,255,.25)'; c.beginPath(); c.arc(-30 * a.lado, -150, 40, 0, 7); c.fill();
+    if (a.tipo === 'gelopedra') {
+      // pedra/bloco de gelo gigante no canto
+      c.fillStyle = '#dff6fb'; c.strokeStyle = '#8fc9de'; c.lineWidth = 2.4;
+      c.beginPath();
+      c.moveTo(-20 * a.lado, 70); c.lineTo(-42 * a.lado, 10); c.lineTo(-16 * a.lado, -68); c.lineTo(20 * a.lado, -92);
+      c.lineTo(46 * a.lado, -28); c.lineTo(30 * a.lado, 60); c.closePath(); c.fill(); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,.55)';
+      c.beginPath(); c.moveTo(-14 * a.lado, -58); c.lineTo(12 * a.lado, -74); c.lineTo(6 * a.lado, -18); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(140,210,230,.7)'; c.lineWidth = 1.4;
+      c.beginPath(); c.moveTo(-10 * a.lado, 40); c.lineTo(16 * a.lado, -10); c.stroke();
+    } else if (a.tipo === 'vulcaoparte') {
+      // pedaço de rocha vulcânica com rachaduras de lava
+      c.fillStyle = '#2e1712'; c.strokeStyle = '#160a07'; c.lineWidth = 2.4;
+      c.beginPath();
+      c.moveTo(-18 * a.lado, 70); c.lineTo(-40 * a.lado, -8); c.lineTo(-10 * a.lado, -90); c.lineTo(24 * a.lado, -70);
+      c.lineTo(42 * a.lado, -8); c.lineTo(26 * a.lado, 60); c.closePath(); c.fill(); c.stroke();
+      const glowT = .5 + Math.sin(t * 3) * .5;
+      c.strokeStyle = `rgba(255,${140 + glowT * 60},40,${.7 + glowT * .3})`; c.lineWidth = 3;
+      c.beginPath(); c.moveTo(-10 * a.lado, 20); c.lineTo(6 * a.lado, -30); c.lineTo(-6 * a.lado, -58); c.stroke();
+      c.fillStyle = 'rgba(120,120,120,.28)';
+      c.beginPath(); c.ellipse(6 * a.lado, -100, 22, 14, 0, 0, 7); c.fill();
+    } else if (a.tipo === 'lua') {
+      // parte da lua visível na lateral
+      const g = c.createRadialGradient(-24 * a.lado, -22, 12, 0, 0, 90);
+      g.addColorStop(0, '#f4f1e8'); g.addColorStop(1, '#b8b3a0');
+      c.fillStyle = g; c.beginPath(); c.arc(0, 0, 76, 0, 7); c.fill();
+      c.fillStyle = 'rgba(150,145,130,.5)';
+      c.beginPath(); c.arc(-22 * a.lado, -18, 12, 0, 7); c.fill();
+      c.beginPath(); c.arc(9 * a.lado, 24, 9, 0, 7); c.fill();
+      c.beginPath(); c.arc(28 * a.lado, -32, 7, 0, 7); c.fill();
+    } else {
+      // árvore gigante da floresta
+      c.fillStyle = '#4a3320'; c.beginPath(); c.moveTo(-14 * a.lado, 60); c.lineTo(14 * a.lado, 60); c.lineTo(9 * a.lado, -60); c.lineTo(-9 * a.lado, -60); c.closePath(); c.fill();
+      const g = c.createRadialGradient(0, -110, 10, 0, -110, 120);
+      g.addColorStop(0, '#dff2b0'); g.addColorStop(1, '#a8d97a');
+      c.fillStyle = g; c.beginPath(); c.arc(0, -110, 110, 0, 7); c.fill();
+      c.fillStyle = 'rgba(255,255,255,.25)'; c.beginPath(); c.arc(-30 * a.lado, -150, 40, 0, 7); c.fill();
+    }
     c.restore();
   }
 }
