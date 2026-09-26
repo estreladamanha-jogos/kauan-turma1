@@ -116,7 +116,7 @@ const PY = 190;                 // altura fixa do Fagulha na tela (o cenário é
 const BASE_V = 230;             // velocidade da queda (pixels por segundo)
 const META_M = 1000;            // metros totais até o fim do jogo
 const META = META_M * 10;       // em unidades internas de "dist"
-const MUNDO_M = 250;            // metros de cada mundo
+const MUNDO_M = 200;            // metros de cada mundo (5 mundos de 200m = 1000m)
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rnd = (a, b) => a + Math.random() * (b - a);
 
@@ -126,6 +126,7 @@ const MUNDOS = [
   { nome: 'GELO', top: '#173a55', bottom: '#04141f', obstCor: '#bfe6f2', obstEscura: '#5f8fa0' },
   { nome: 'VULCÃO', top: '#5c1210', bottom: '#1a0402', obstCor: '#5a3626', obstEscura: '#2a1410' },
   { nome: 'ESPAÇO ROXO', top: '#2a1152', bottom: '#0a0620', obstCor: '#8a76c9', obstEscura: '#443368' },
+  { nome: 'MUSICAL', top: '#2a0a3a', bottom: '#05010a', obstCor: '#ff5fd1', obstEscura: '#7a1d63' },
 ];
 
 let estado = 'inicio';          // inicio | jogando | gameover | vitoria
@@ -135,24 +136,28 @@ const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [], amb = [], arvores = [];
 let galhos = [], neves = [], fogosCeu = [], fogosLado = [], estrelasCad = [];
 let tiros = [];
-let dashCd = 0, fireCd = 0, escudoCd = 0, escudoT = 0;
+let notas = [];
+let dashCd = 0, fireCd = 0, escudoCd = 0, escudoT = 0, gritoCd = 0;
+let gritoOnda = null;
+let beatT = 0.5, beatFlash = 0;
 let qCiclo = 0;
 let spawnT = 1, gemT = 1;
 const keys = { left: false, right: false };
-let worldIdx = 0, portalPassados = [false, false, false], portalFx = 0, portalDe = 0, portalPara = 0;
-const timers = { leaf: 0, feather: 0, bird: 0, ice: 0, snowball: 0, flocos: 0, fire: 0, flame: 0, star: 0, rocket: -1, tree: 0, galho: 0, neve: 0, fogoCeu: 0, fogoLado: 0, estrelaCad: 0 };
+let worldIdx = 0, portalPassados = [false, false, false, false], portalFx = 0, portalDe = 0, portalPara = 0;
+const timers = { leaf: 0, feather: 0, bird: 0, ice: 0, snowball: 0, flocos: 0, fire: 0, flame: 0, star: 0, rocket: -1, tree: 0, galho: 0, neve: 0, fogoCeu: 0, fogoLado: 0, estrelaCad: 0, nota: 0 };
 
 function resetar() {
   estado = 'jogando'; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; shake = 0;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; amb = []; arvores = []; spawnT = 1; gemT = 1;
-  galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; tiros = [];
-  dashCd = 0; fireCd = 0; escudoCd = 0; escudoT = 0; qCiclo = 0;
-  worldIdx = 0; portalPassados = [false, false, false]; portalFx = 0;
+  galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; tiros = []; notas = [];
+  dashCd = 0; fireCd = 0; escudoCd = 0; escudoT = 0; gritoCd = 0; gritoOnda = null; qCiclo = 0;
+  beatT = 0.5; beatFlash = 0;
+  worldIdx = 0; portalPassados = [false, false, false, false]; portalFx = 0;
   for (const k in timers) timers[k] = k === 'rocket' ? rnd(3, 6) : 0;
 }
 
-/* ---------- poderes: dash (ESPAÇO), fogo (E) e escudo (F) ---------- */
-/* a tecla Q alterna entre os três a cada clique: 1º dash, 2º fogo, 3º escudo */
+/* ---------- poderes: dash (ESPAÇO), fogo (E), escudo (F) e grito sônico (G) ---------- */
+/* a tecla Q alterna entre os quatro a cada clique: 1º dash, 2º fogo, 3º escudo, 4º grito */
 function usarDash() {
   if (dashCd > 0) return;
   const dir = jog.dir || 1;
@@ -177,16 +182,52 @@ function usarEscudo() {
   burst(jog.x, PY, '#9ad1ff', 14, 140);
 }
 
+/* grito sônico: onda que quebra cristais de gelo e empurra o resto */
+function usarGrito() {
+  if (gritoCd > 0) return;
+  gritoCd = 7;
+  beatFlash = 1.6;
+  gritoOnda = { r: 10, max: 260 };
+  for (let i = 0; i < 3; i++) notas.push({ x: jog.x + rnd(-18, 18), y: PY - 30 - i * 10, vy: -70 - i * 10, life: 1 });
+  burst(jog.x, PY, '#ffe9ff', 18, 200);
+
+  const RAIO = 170;
+  // quebra os cristais de gelo (obstáculos de gelo e bolas de neve)
+  for (const o of obst) if (!o.morto && o.tipo === 1 && Math.hypot(o.x - jog.x, o.y - PY) < RAIO) { o.morto = true; burst(o.x, o.y, '#eaf9ff', 10, 140); }
+  for (const n of neves) if (!n.morto && Math.hypot(n.x - jog.x, n.y - PY) < RAIO) { n.morto = true; burst(n.x, n.y, '#fff', 8, 120); }
+
+  // empurra o resto
+  const empurrar = it => {
+    const dx = it.x - jog.x, dy = (it.y !== undefined ? it.y : PY) - PY, dd = Math.hypot(dx, dy);
+    if (dd > 0 && dd < RAIO) {
+      const f = (1 - dd / RAIO) * 90;
+      it.x = clamp(it.x + dx / dd * f, -60, W + 60);
+      if (it.y !== undefined) it.y += dy / dd * f;
+    }
+  };
+  for (const o of obst) if (!o.morto && o.tipo !== 1) empurrar(o);
+  for (const f of fogosCeu) if (!f.morto) empurrar(f);
+  for (const f of fogosLado) if (!f.morto) empurrar(f);
+  for (const s of estrelasCad) if (!s.morto) empurrar(s);
+}
+
 function usarQ() {
-  qCiclo = (qCiclo % 3) + 1;
+  qCiclo = (qCiclo % 4) + 1;
   if (qCiclo === 1) usarDash();
   else if (qCiclo === 2) usarFogo();
-  else usarEscudo();
+  else if (qCiclo === 3) usarEscudo();
+  else usarGrito();
 }
 
 /* ---------- obstáculos principais (um tipo diferente por mundo) ---------- */
 function criarObstaculo() {
   obst.push({ x: rnd(50, W - 50), y: H + 40, w: rnd(50, 88), h: rnd(40, 56), sd: Math.random(), variante: Math.floor(rnd(0, 3)), tipo: worldIdx });
+}
+
+/* batida do mundo musical: um "bip" a cada 0,5s que pulsa o fundo e, no mundo musical, cria o obstáculo */
+function onBeat() {
+  beatFlash = Math.max(beatFlash, .6);
+  if (worldIdx === 4) criarObstaculo();
 }
 
 function desenharObstaculo(o) {
@@ -226,7 +267,7 @@ function desenharObstaculo(o) {
     c.fillStyle = '#ffcf4d';
     c.beginPath(); c.moveTo(-o.w * .16, o.h / 2); c.quadraticCurveTo(-o.w * .2 + fl * .6, o.h * .1, 0, -o.h * .3);
     c.quadraticCurveTo(o.w * .2 - fl * .6, o.h * .1, o.w * .16, o.h / 2); c.closePath(); c.fill();
-  } else { // roxo: luas em vez de pedra
+  } else if (o.tipo === 3) { // roxo: luas em vez de pedra
     const g = c.createRadialGradient(-o.w * .18, -o.h * .18, o.w * .05, 0, 0, o.w * .55);
     g.addColorStop(0, '#f4f1e8'); g.addColorStop(1, '#a9a494');
     c.fillStyle = g; c.beginPath(); c.arc(0, 0, o.w * .5, 0, 7); c.fill();
@@ -234,6 +275,15 @@ function desenharObstaculo(o) {
     c.beginPath(); c.arc(-o.w * .14, -o.h * .1, o.w * .1, 0, 7); c.fill();
     c.beginPath(); c.arc(o.w * .12, o.h * .08, o.w * .07, 0, 7); c.fill();
     c.beginPath(); c.arc(o.w * .02, -o.h * .22, o.w * .06, 0, 7); c.fill();
+  } else { // musical: nota gigante pulsando no ritmo da batida
+    const pulso = 1 + Math.sin(t * 6) * .15;
+    c.save(); c.scale(pulso, pulso);
+    c.strokeStyle = '#7a1d63'; c.lineWidth = 3;
+    c.fillStyle = '#ff5fd1'; c.beginPath(); c.ellipse(-o.w * .12, o.h * .28, o.w * .22, o.h * .16, -.3, 0, 7); c.fill(); c.stroke();
+    c.fillStyle = '#ff5fd1'; c.fillRect(o.w * .06, -o.h * .5, 6, o.h * .8);
+    c.beginPath(); c.moveTo(o.w * .06, -o.h * .5); c.quadraticCurveTo(o.w * .35, -o.h * .4, o.w * .3, -o.h * .1);
+    c.quadraticCurveTo(o.w * .15, -o.h * .2, o.w * .06, -o.h * .05); c.closePath(); c.fillStyle = '#ffd6f5'; c.fill();
+    c.restore();
   }
   c.restore();
 }
@@ -310,6 +360,16 @@ function spawnAmbiente(dt) {
       arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'lua' });
       timers.tree = rnd(8, 11);
     }
+  } else if (worldIdx === 4) { // musical
+    if (timers.nota <= 0) {
+      const cores = ['#ff5fd1', '#7afcff', '#ffe94d', '#a5ff7a'];
+      amb.push({ tp: 'notaamb', x: rnd(10, W - 10), y: -20, vy: rnd(30, 60), vx: rnd(-15, 15), rot: rnd(0, 6.28), vr: rnd(-1, 1), cor: cores[Math.floor(rnd(0, cores.length))], sz: rnd(10, 16) });
+      timers.nota = rnd(.3, .6);
+    }
+    if (timers.tree <= 0) {
+      arvores.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, tipo: 'caixasom' });
+      timers.tree = rnd(7, 10);
+    }
   }
 
   for (const p of amb) { p.x += (p.vx || 0) * dt; p.y += (p.vy || 0) * dt; if (p.rot !== undefined) p.rot += (p.vr || 0) * dt; }
@@ -353,6 +413,10 @@ function desenharAmbiente() {
       c.fillStyle = '#e8e8f0'; c.beginPath(); c.ellipse(0, 0, 8, 16, 0, 0, 7); c.fill();
       c.fillStyle = '#ff5555'; c.beginPath(); c.moveTo(0, -16); c.lineTo(6, -6); c.lineTo(-6, -6); c.closePath(); c.fill();
       c.fillStyle = '#ff9a3d'; c.beginPath(); c.moveTo(-4, 14); c.lineTo(4, 14); c.lineTo(0, 30 + Math.sin(t * 20) * 6); c.closePath(); c.fill();
+    } else if (p.tp === 'notaamb') {
+      c.rotate(p.rot); c.fillStyle = p.cor;
+      c.beginPath(); c.ellipse(-p.sz * .35, p.sz * .55, p.sz * .35, p.sz * .22, -.3, 0, 7); c.fill();
+      c.fillRect(p.sz * .06, -p.sz * .8, p.sz * .12, p.sz * 1.3);
     }
     c.restore();
   }
@@ -395,6 +459,18 @@ function desenharArvores(dt) {
       c.beginPath(); c.arc(-22 * a.lado, -18, 12, 0, 7); c.fill();
       c.beginPath(); c.arc(9 * a.lado, 24, 9, 0, 7); c.fill();
       c.beginPath(); c.arc(28 * a.lado, -32, 7, 0, 7); c.fill();
+    } else if (a.tipo === 'caixasom') {
+      // caixa de som gigante pulsando no ritmo
+      const pulso = 1 + beatFlash * .12;
+      c.save(); c.scale(pulso, pulso);
+      c.fillStyle = '#1a1220'; c.strokeStyle = '#ff5fd1'; c.lineWidth = 3;
+      c.beginPath(); c.roundRect ? c.roundRect(-30 * a.lado, -110, 60 * a.lado, 130, 8) : c.rect(-30 * a.lado, -110, 60 * a.lado, 130);
+      c.fill(); c.stroke();
+      c.fillStyle = '#333'; c.beginPath(); c.arc(0, -70, 20, 0, 7); c.fill();
+      c.strokeStyle = '#ff5fd1'; c.beginPath(); c.arc(0, -70, 20, 0, 7); c.stroke();
+      c.fillStyle = '#333'; c.beginPath(); c.arc(0, -20, 14, 0, 7); c.fill();
+      c.strokeStyle = '#7afcff'; c.beginPath(); c.arc(0, -20, 14, 0, 7); c.stroke();
+      c.restore();
     } else {
       // árvore gigante da floresta
       c.fillStyle = '#4a3320'; c.beginPath(); c.moveTo(-14 * a.lado, 60); c.lineTo(14 * a.lado, 60); c.lineTo(9 * a.lado, -60); c.lineTo(-9 * a.lado, -60); c.closePath(); c.fill();
@@ -560,6 +636,7 @@ addEventListener('keydown', e => {
   if (k === 'Space') usarDash();
   if (k === 'KeyE') usarFogo();
   if (k === 'KeyF') usarEscudo();
+  if (k === 'KeyG') usarGrito();
   if (k === 'KeyQ') usarQ();
 });
 addEventListener('keyup', e => {
@@ -579,14 +656,14 @@ function update(dt) {
 
   const metros = dist / 10;
 
-  // ---- mundos: troca e portal a cada 250 m ----
-  const novoIdx = Math.min(3, Math.floor(metros / MUNDO_M));
-  for (let i = 0; i < 3; i++) {
+  // ---- mundos: troca e portal a cada 200 m (5 mundos) ----
+  const novoIdx = Math.min(4, Math.floor(metros / MUNDO_M));
+  for (let i = 0; i < 4; i++) {
     const limite = (i + 1) * MUNDO_M;
     if (!portalPassados[i] && metros >= limite) {
-      portalPassados[i] = true; portalFx = 1.3; portalDe = worldIdx; portalPara = Math.min(3, i + 1);
+      portalPassados[i] = true; portalFx = 1.3; portalDe = worldIdx; portalPara = Math.min(4, i + 1);
       // limpa tudo do mundo anterior, nada atravessa o portal
-      amb = []; arvores = []; galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; obst = []; tiros = [];
+      amb = []; arvores = []; galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; obst = []; tiros = []; notas = [];
     }
   }
   worldIdx = novoIdx;
@@ -596,6 +673,15 @@ function update(dt) {
   if (fireCd > 0) fireCd -= dt;
   if (escudoCd > 0) escudoCd -= dt;
   if (escudoT > 0) escudoT -= dt;
+  if (gritoCd > 0) gritoCd -= dt;
+  if (gritoOnda) { gritoOnda.r += 480 * dt; if (gritoOnda.r > gritoOnda.max) gritoOnda = null; }
+  for (const n of notas) { n.y += n.vy * dt; n.life -= dt; }
+  notas = notas.filter(n => n.life > 0);
+
+  // ---- batida do mundo musical (um "bip" a cada 0,5s, pulsa o fundo) ----
+  beatT -= dt;
+  if (beatT <= 0) { beatT = 0.5; onBeat(); }
+  if (beatFlash > 0) beatFlash -= dt * 1.5;
 
   // ---- movimento do Fagulha ----
   const ax = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
@@ -621,9 +707,9 @@ function update(dt) {
   spawnPerigos(dt);
   checarColisaoPerigos();
 
-  // ---- obstáculos ----
+  // ---- obstáculos (no mundo musical eles só nascem no bip da batida) ----
   spawnT -= dt;
-  if (spawnT <= 0) { criarObstaculo(); spawnT = 1.0; }
+  if (spawnT <= 0 && worldIdx !== 4) { criarObstaculo(); spawnT = 1.0; }
   for (const o of obst) o.y -= vel * dt;
   obst = obst.filter(o => o.y > -80 && !o.morto);
 
@@ -673,9 +759,11 @@ function fundo() {
     const gc = c.createRadialGradient(W * .55, H * .8, 4, W * .55, H * .8, 60);
     gc.addColorStop(0, '#ffd23d'); gc.addColorStop(1, 'rgba(255,80,20,0)');
     c.fillStyle = gc; c.beginPath(); c.arc(W * .55, H * .8, 60, 0, 7); c.fill();
+  } else if (worldIdx === 4) { // musical: fundo pulsa no ritmo da batida
+    c.fillStyle = `rgba(255,95,209,${beatFlash * .35})`; c.fillRect(0, 0, W, H);
   }
 
-  c.fillStyle = worldIdx === 0 ? '#0e2a15' : worldIdx === 1 ? '#0e2438' : worldIdx === 2 ? '#2a0f0a' : '#1a0e38';
+  c.fillStyle = worldIdx === 0 ? '#0e2a15' : worldIdx === 1 ? '#0e2438' : worldIdx === 2 ? '#2a0f0a' : worldIdx === 3 ? '#1a0e38' : '#1a0522';
   for (let k = -1; k < 8; k++) { const y = k * 100 - (dist % 100); c.fillRect(0, y, 26, 100); c.fillRect(W - 26, y, 26, 100); }
   c.strokeStyle = 'rgba(255,255,255,.07)'; c.lineWidth = 2; for (let k = -1; k < 8; k++) { const y = k * 100 - (dist % 100); c.strokeRect(2, y + 2, 22, 96); c.strokeRect(W - 24, y + 2, 22, 96); }
 }
@@ -701,6 +789,7 @@ function desenhar() {
   c.save();
   if (shake > 0) c.translate(rnd(-5, 5), rnd(-5, 5));
   fundo();
+  if (beatFlash > 0) { c.save(); c.globalAlpha = clamp(beatFlash, 0, 1) * .3; c.fillStyle = MUNDOS[worldIdx].obstCor; c.fillRect(0, 0, W, H); c.globalAlpha = 1; c.restore(); }
   desenharArvores(0);
   desenharAmbiente();
 
@@ -736,6 +825,12 @@ function desenhar() {
   }
   for (const p of fx) { c.globalAlpha = clamp(p.life / p.max, 0, 1); c.fillStyle = p.cor; c.beginPath(); c.arc(p.x, p.y, p.r, 0, 7); c.fill(); }
   c.globalAlpha = 1;
+  if (gritoOnda) {
+    c.save(); c.globalAlpha = clamp(1 - gritoOnda.r / gritoOnda.max, 0, 1) * .7;
+    c.strokeStyle = '#ffe9ff'; c.lineWidth = 6; c.beginPath(); c.arc(jog.x, PY, gritoOnda.r, 0, 7); c.stroke();
+    c.globalAlpha = 1; c.restore();
+  }
+  for (const n of notas) { c.save(); c.globalAlpha = clamp(n.life, 0, 1); c.font = '20px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillStyle = '#ffe9ff'; c.fillText('♪', n.x, n.y); c.globalAlpha = 1; c.restore(); }
   desenharPortal();
   c.restore();
   hud();
@@ -759,25 +854,29 @@ function hud() {
   texto(Math.floor(dist / 10) + ' m', W - 11, 196, 8, '#fff', 'right');
 
   // ---- poderes ----
-  const dashPronto = dashCd <= 0, firePronto = fireCd <= 0, escudoPronto = escudoCd <= 0;
+  const dashPronto = dashCd <= 0, firePronto = fireCd <= 0, escudoPronto = escudoCd <= 0, gritoPronto = gritoCd <= 0;
   c.font = '13px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
 
   c.beginPath(); c.arc(26, H - 26, 16, 0, 7); c.fillStyle = dashPronto ? 'rgba(191,232,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
   c.fillStyle = dashPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('␣', 26, H - 26);
 
-  c.beginPath(); c.arc(66, H - 26, 16, 0, 7); c.fillStyle = firePronto ? 'rgba(255,154,61,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.beginPath(); c.arc(64, H - 26, 16, 0, 7); c.fillStyle = firePronto ? 'rgba(255,154,61,.9)' : 'rgba(255,255,255,.2)'; c.fill();
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
-  c.fillStyle = firePronto ? '#5c1210' : 'rgba(255,255,255,.5)'; c.fillText('E', 66, H - 26);
+  c.fillStyle = firePronto ? '#5c1210' : 'rgba(255,255,255,.5)'; c.fillText('E', 64, H - 26);
 
-  c.beginPath(); c.arc(106, H - 26, 16, 0, 7); c.fillStyle = escudoPronto ? 'rgba(154,209,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.beginPath(); c.arc(102, H - 26, 16, 0, 7); c.fillStyle = escudoPronto ? 'rgba(154,209,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
-  c.fillStyle = escudoPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('F', 106, H - 26);
+  c.fillStyle = escudoPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('F', 102, H - 26);
+
+  c.beginPath(); c.arc(140, H - 26, 16, 0, 7); c.fillStyle = gritoPronto ? 'rgba(255,95,209,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = gritoPronto ? '#3a0a2e' : 'rgba(255,255,255,.5)'; c.fillText('G', 140, H - 26);
 
   // indicador do ciclo da tecla Q
-  const nomesQ = ['DASH', 'FOGO', 'ESCUDO'];
+  const nomesQ = ['DASH', 'FOGO', 'ESCUDO', 'GRITO'];
   c.font = '9px sans-serif'; c.fillStyle = '#bfe8ff';
-  c.fillText('Q → ' + nomesQ[qCiclo % 3], 66, H - 48);
+  c.fillText('Q → ' + nomesQ[qCiclo % 4], 83, H - 48);
 }
 
 function telas() {
@@ -786,8 +885,9 @@ function telas() {
     texto('FAGULHA', W / 2, 150, 34, '#ffe9a8');
     texto('QUEDA ENTRE MUNDOS', W / 2, 200, 12, '#7af6ff');
     drawFagulha(c, W / 2, 345, .9, performance.now() / 1000, { pose: 'stand' });
-    texto('← → MOVER   ESPAÇO DASH', W / 2, 460, 8, '#bfe8ff');
-    texto('E FOGO   F ESCUDO   Q ALTERNA', W / 2, 480, 8, '#bfe8ff');
+    texto('← → MOVER   ESPAÇO DASH', W / 2, 455, 8, '#bfe8ff');
+    texto('E FOGO   F ESCUDO   G GRITO', W / 2, 473, 8, '#bfe8ff');
+    texto('Q ALTERNA ENTRE OS PODERES', W / 2, 491, 8, '#bfe8ff');
     if (Math.floor(performance.now() / 500) % 2) texto('APERTE ESPAÇO', W / 2, 520, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.78)'; c.fillRect(0, 0, W, H);
