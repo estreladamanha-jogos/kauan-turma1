@@ -135,7 +135,8 @@ const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [], amb = [], arvores = [];
 let galhos = [], neves = [], fogosCeu = [], fogosLado = [], estrelasCad = [];
 let tiros = [];
-let dashCd = 0, fireCd = 0;
+let dashCd = 0, fireCd = 0, escudoCd = 0, escudoT = 0;
+let qCiclo = 0;
 let spawnT = 1, gemT = 1;
 const keys = { left: false, right: false };
 let worldIdx = 0, portalPassados = [false, false, false], portalFx = 0, portalDe = 0, portalPara = 0;
@@ -145,12 +146,13 @@ function resetar() {
   estado = 'jogando'; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; shake = 0;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; amb = []; arvores = []; spawnT = 1; gemT = 1;
   galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; tiros = [];
-  dashCd = 0; fireCd = 0;
+  dashCd = 0; fireCd = 0; escudoCd = 0; escudoT = 0; qCiclo = 0;
   worldIdx = 0; portalPassados = [false, false, false]; portalFx = 0;
   for (const k in timers) timers[k] = k === 'rocket' ? rnd(3, 6) : 0;
 }
 
-/* ---------- poderes: dash (ESPAÇO) e fogo (Q) ---------- */
+/* ---------- poderes: dash (ESPAÇO), fogo (E) e escudo (F) ---------- */
+/* a tecla Q alterna entre os três a cada clique: 1º dash, 2º fogo, 3º escudo */
 function usarDash() {
   if (dashCd > 0) return;
   const dir = jog.dir || 1;
@@ -165,6 +167,21 @@ function usarFogo() {
   fireCd = 1.6;
   tiros.push({ x: jog.x, y: PY + 20, vy: 420 });
   burst(jog.x, PY + 20, '#ffcf4d', 8, 90);
+}
+
+function usarEscudo() {
+  if (escudoCd > 0) return;
+  escudoCd = 4;
+  escudoT = 2;
+  invenc = Math.max(invenc, escudoT);
+  burst(jog.x, PY, '#9ad1ff', 14, 140);
+}
+
+function usarQ() {
+  qCiclo = (qCiclo % 3) + 1;
+  if (qCiclo === 1) usarDash();
+  else if (qCiclo === 2) usarFogo();
+  else usarEscudo();
 }
 
 /* ---------- obstáculos principais (um tipo diferente por mundo) ---------- */
@@ -539,8 +556,11 @@ addEventListener('keydown', e => {
   if (estado !== 'jogando') { if (k === 'Space' || k === 'Enter' || k === 'KeyR') resetar(); return; }
   if (k === 'ArrowLeft' || k === 'KeyA') keys.left = true;
   if (k === 'ArrowRight' || k === 'KeyD') keys.right = true;
+  if (e.repeat) return;
   if (k === 'Space') usarDash();
-  if (k === 'KeyQ') usarFogo();
+  if (k === 'KeyE') usarFogo();
+  if (k === 'KeyF') usarEscudo();
+  if (k === 'KeyQ') usarQ();
 });
 addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -574,6 +594,8 @@ function update(dt) {
   // ---- poderes ----
   if (dashCd > 0) dashCd -= dt;
   if (fireCd > 0) fireCd -= dt;
+  if (escudoCd > 0) escudoCd -= dt;
+  if (escudoT > 0) escudoT -= dt;
 
   // ---- movimento do Fagulha ----
   const ax = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
@@ -696,11 +718,21 @@ function desenhar() {
   desenharTiros();
 
   // ---- o Fagulha ----
-  const piscando = invenc > 0 && Math.floor(t * 14) % 2 === 0;
+  const piscando = invenc > 0 && escudoT <= 0 && Math.floor(t * 14) % 2 === 0;
   if (estado !== 'gameover') {
     drawFagulha(c, jog.x, PY + 12, .42, t, {
-      vx: clamp(jog.vx / 300, -1, 1), hit: invenc > 1.2,
+      vx: clamp(jog.vx / 300, -1, 1), hit: invenc > 1.2 && escudoT <= 0,
       alpha: piscando ? .3 : 1 });
+    if (escudoT > 0) {
+      c.save(); c.translate(jog.x, PY + 12);
+      const pulso = 40 + Math.sin(t * 8) * 3;
+      c.globalAlpha = clamp(escudoT / 2, .3, 1) * .5;
+      c.fillStyle = '#9ad1ff'; c.beginPath(); c.arc(0, 0, pulso, 0, 7); c.fill();
+      c.globalAlpha = clamp(escudoT / 2, .3, 1);
+      c.strokeStyle = '#dff1ff'; c.lineWidth = 3; c.beginPath(); c.arc(0, 0, pulso, 0, 7); c.stroke();
+      c.globalAlpha = 1;
+      c.restore();
+    }
   }
   for (const p of fx) { c.globalAlpha = clamp(p.life / p.max, 0, 1); c.fillStyle = p.cor; c.beginPath(); c.arc(p.x, p.y, p.r, 0, 7); c.fill(); }
   c.globalAlpha = 1;
@@ -727,15 +759,25 @@ function hud() {
   texto(Math.floor(dist / 10) + ' m', W - 11, 196, 8, '#fff', 'right');
 
   // ---- poderes ----
-  const dashPronto = dashCd <= 0, firePronto = fireCd <= 0;
+  const dashPronto = dashCd <= 0, firePronto = fireCd <= 0, escudoPronto = escudoCd <= 0;
+  c.font = '13px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+
   c.beginPath(); c.arc(26, H - 26, 16, 0, 7); c.fillStyle = dashPronto ? 'rgba(191,232,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
-  c.font = '13px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   c.fillStyle = dashPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('␣', 26, H - 26);
 
   c.beginPath(); c.arc(66, H - 26, 16, 0, 7); c.fillStyle = firePronto ? 'rgba(255,154,61,.9)' : 'rgba(255,255,255,.2)'; c.fill();
   c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
-  c.fillStyle = firePronto ? '#5c1210' : 'rgba(255,255,255,.5)'; c.fillText('Q', 66, H - 26);
+  c.fillStyle = firePronto ? '#5c1210' : 'rgba(255,255,255,.5)'; c.fillText('E', 66, H - 26);
+
+  c.beginPath(); c.arc(106, H - 26, 16, 0, 7); c.fillStyle = escudoPronto ? 'rgba(154,209,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = escudoPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('F', 106, H - 26);
+
+  // indicador do ciclo da tecla Q
+  const nomesQ = ['DASH', 'FOGO', 'ESCUDO'];
+  c.font = '9px sans-serif'; c.fillStyle = '#bfe8ff';
+  c.fillText('Q → ' + nomesQ[qCiclo % 3], 66, H - 48);
 }
 
 function telas() {
@@ -744,7 +786,8 @@ function telas() {
     texto('FAGULHA', W / 2, 150, 34, '#ffe9a8');
     texto('QUEDA ENTRE MUNDOS', W / 2, 200, 12, '#7af6ff');
     drawFagulha(c, W / 2, 345, .9, performance.now() / 1000, { pose: 'stand' });
-    texto('← → MOVER   ESPAÇO DASH   Q FOGO', W / 2, 470, 8, '#bfe8ff');
+    texto('← → MOVER   ESPAÇO DASH', W / 2, 460, 8, '#bfe8ff');
+    texto('E FOGO   F ESCUDO   Q ALTERNA', W / 2, 480, 8, '#bfe8ff');
     if (Math.floor(performance.now() / 500) % 2) texto('APERTE ESPAÇO', W / 2, 520, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.78)'; c.fillRect(0, 0, W, H);
