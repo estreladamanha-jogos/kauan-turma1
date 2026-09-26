@@ -134,6 +134,8 @@ let vidas = 3, invenc = 0, cristais = 0, shake = 0;
 const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [], amb = [], arvores = [];
 let galhos = [], neves = [], fogosCeu = [], fogosLado = [], estrelasCad = [];
+let tiros = [];
+let dashCd = 0, fireCd = 0;
 let spawnT = 1, gemT = 1;
 const keys = { left: false, right: false };
 let worldIdx = 0, portalPassados = [false, false, false], portalFx = 0, portalDe = 0, portalPara = 0;
@@ -142,9 +144,27 @@ const timers = { leaf: 0, feather: 0, bird: 0, ice: 0, snowball: 0, flocos: 0, f
 function resetar() {
   estado = 'jogando'; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; shake = 0;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; amb = []; arvores = []; spawnT = 1; gemT = 1;
-  galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = [];
+  galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; tiros = [];
+  dashCd = 0; fireCd = 0;
   worldIdx = 0; portalPassados = [false, false, false]; portalFx = 0;
   for (const k in timers) timers[k] = k === 'rocket' ? rnd(3, 6) : 0;
+}
+
+/* ---------- poderes: dash (ESPAÇO) e fogo (Q) ---------- */
+function usarDash() {
+  if (dashCd > 0) return;
+  const dir = jog.dir || 1;
+  jog.vx = dir * 620;
+  dashCd = 1.4;
+  invenc = Math.max(invenc, .3);
+  burst(jog.x, PY, '#bfe8ff', 12, 160);
+}
+
+function usarFogo() {
+  if (fireCd > 0) return;
+  fireCd = 1.6;
+  tiros.push({ x: jog.x, y: PY + 20, vy: 420 });
+  burst(jog.x, PY + 20, '#ffcf4d', 8, 90);
 }
 
 /* ---------- obstáculos principais (um tipo diferente por mundo) ---------- */
@@ -501,6 +521,17 @@ function desenharEstrelasCad() {
   }
 }
 
+function desenharTiros() {
+  for (const p of tiros) {
+    c.save(); c.translate(p.x, p.y);
+    const g = c.createRadialGradient(0, -8, 1, 0, 0, 16);
+    g.addColorStop(0, '#fff2b0'); g.addColorStop(.5, '#ff8a2a'); g.addColorStop(1, 'rgba(255,60,20,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, 16, 0, 7); c.fill();
+    c.fillStyle = '#ffcf4d'; c.beginPath(); c.arc(0, -2, 7, 0, 7); c.fill();
+    c.restore();
+  }
+}
+
 /* ---------- entrada ---------- */
 addEventListener('keydown', e => {
   const k = e.code;
@@ -508,6 +539,8 @@ addEventListener('keydown', e => {
   if (estado !== 'jogando') { if (k === 'Space' || k === 'Enter' || k === 'KeyR') resetar(); return; }
   if (k === 'ArrowLeft' || k === 'KeyA') keys.left = true;
   if (k === 'ArrowRight' || k === 'KeyD') keys.right = true;
+  if (k === 'Space') usarDash();
+  if (k === 'KeyQ') usarFogo();
 });
 addEventListener('keyup', e => {
   if (e.code === 'ArrowLeft' || e.code === 'KeyA') keys.left = false;
@@ -533,16 +566,30 @@ function update(dt) {
     if (!portalPassados[i] && metros >= limite) {
       portalPassados[i] = true; portalFx = 1.3; portalDe = worldIdx; portalPara = Math.min(3, i + 1);
       // limpa tudo do mundo anterior, nada atravessa o portal
-      amb = []; arvores = []; galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; obst = [];
+      amb = []; arvores = []; galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = []; obst = []; tiros = [];
     }
   }
   worldIdx = novoIdx;
+
+  // ---- poderes ----
+  if (dashCd > 0) dashCd -= dt;
+  if (fireCd > 0) fireCd -= dt;
 
   // ---- movimento do Fagulha ----
   const ax = (keys.left ? -1 : 0) + (keys.right ? 1 : 0);
   if (ax) jog.dir = ax;
   jog.vx += (ax * 300 - jog.vx) * Math.min(1, dt * 10);
   jog.x = clamp(jog.x + jog.vx * dt, 34, W - 34);
+
+  // ---- tiro de fogo (poder do Q) ----
+  for (const p of tiros) p.y += p.vy * dt;
+  for (const p of tiros) {
+    for (const o of obst) if (!o.morto && Math.abs(o.x - p.x) < 40 && Math.abs(o.y - p.y) < 40) { o.morto = true; p.morto = true; burst(o.x, o.y, '#ff7a1f', 10, 120); }
+    for (const n of neves) if (!n.morto && Math.abs(n.x - p.x) < n.r + 20 && Math.abs(n.y - p.y) < n.r + 20) { n.morto = true; p.morto = true; burst(n.x, n.y, '#ff7a1f', 8, 100); }
+    for (const f of fogosCeu) if (!f.morto && Math.abs(f.x - p.x) < f.r + 20 && Math.abs(f.y - p.y) < f.r + 20) { f.morto = true; p.morto = true; burst(f.x, f.y, '#ff7a1f', 8, 100); }
+    for (const s of estrelasCad) if (!s.morto && Math.abs(s.x - p.x) < s.r + 20 && Math.abs(s.y - p.y) < s.r + 20) { s.morto = true; p.morto = true; burst(s.x, s.y, '#ff7a1f', 8, 100); }
+  }
+  tiros = tiros.filter(p => p.y < H + 40 && !p.morto);
 
   // ---- ambiente decorativo ----
   spawnAmbiente(dt);
@@ -646,6 +693,7 @@ function desenhar() {
   desenharFogosCeu();
   desenharFogosLado();
   desenharEstrelasCad();
+  desenharTiros();
 
   // ---- o Fagulha ----
   const piscando = invenc > 0 && Math.floor(t * 14) % 2 === 0;
@@ -677,6 +725,17 @@ function hud() {
   c.fillStyle = 'rgba(0,0,0,.45)'; c.fillRect(W - 14, 44, 6, 140);
   c.fillStyle = '#7CFF9E'; c.fillRect(W - 14, 44, 6, 140 * pr);
   texto(Math.floor(dist / 10) + ' m', W - 11, 196, 8, '#fff', 'right');
+
+  // ---- poderes ----
+  const dashPronto = dashCd <= 0, firePronto = fireCd <= 0;
+  c.beginPath(); c.arc(26, H - 26, 16, 0, 7); c.fillStyle = dashPronto ? 'rgba(191,232,255,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+  c.font = '13px sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillStyle = dashPronto ? '#123a55' : 'rgba(255,255,255,.5)'; c.fillText('␣', 26, H - 26);
+
+  c.beginPath(); c.arc(66, H - 26, 16, 0, 7); c.fillStyle = firePronto ? 'rgba(255,154,61,.9)' : 'rgba(255,255,255,.2)'; c.fill();
+  c.strokeStyle = '#fff'; c.lineWidth = 2; c.stroke();
+  c.fillStyle = firePronto ? '#5c1210' : 'rgba(255,255,255,.5)'; c.fillText('Q', 66, H - 26);
 }
 
 function telas() {
@@ -685,6 +744,7 @@ function telas() {
     texto('FAGULHA', W / 2, 150, 34, '#ffe9a8');
     texto('QUEDA ENTRE MUNDOS', W / 2, 200, 12, '#7af6ff');
     drawFagulha(c, W / 2, 345, .9, performance.now() / 1000, { pose: 'stand' });
+    texto('← → MOVER   ESPAÇO DASH   Q FOGO', W / 2, 470, 8, '#bfe8ff');
     if (Math.floor(performance.now() / 500) % 2) texto('APERTE ESPAÇO', W / 2, 520, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.78)'; c.fillRect(0, 0, W, H);
