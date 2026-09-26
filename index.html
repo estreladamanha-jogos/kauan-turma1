@@ -370,6 +370,7 @@ function update(dt) {
     const limite = (i + 1) * MUNDO_M;
     if (!portalPassados[i] && metros >= limite) {
       portalPassados[i] = true; portalFx = 1.3; portalDe = worldIdx; portalPara = Math.min(3, i + 1);
+      amb = []; arvores = []; // limpa tudo do mundo anterior, nada atravessa o portal
     }
   }
   worldIdx = novoIdx;
@@ -450,9 +451,12 @@ function desenharPortal() {
   const alpha = portalFx > .3 ? 1 : portalFx / .3;
   c.save(); c.globalAlpha = alpha * .55;
   const g = c.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, raio);
-  g.addColorStop(0, MUNDOS[portalPara].top); g.addColorStop(.7, MUNDOS[portalPara].obstCor); g.addColorStop(1, 'rgba(255,255,255,0)');
+  g.addColorStop(0, MUNDOS[portalPara].top); g.addColorStop(.55, MUNDOS[portalPara].obstCor); g.addColorStop(.85, MUNDOS[portalDe].obstCor); g.addColorStop(1, 'rgba(255,255,255,0)');
   c.fillStyle = g; c.beginPath(); c.arc(W / 2, H / 2, raio, 0, 7); c.fill();
-  c.globalAlpha = alpha; c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.arc(W / 2, H / 2, Math.min(raio, 130), 0, 7); c.stroke();
+  c.globalAlpha = alpha;
+  c.strokeStyle = MUNDOS[portalPara].obstCor; c.lineWidth = 6; c.beginPath(); c.arc(W / 2, H / 2, Math.min(raio, 130), 0, 7); c.stroke();
+  c.strokeStyle = '#fff'; c.lineWidth = 2.4; c.beginPath(); c.arc(W / 2, H / 2, Math.min(raio, 130) - 6, 0, 7); c.stroke();
+  c.strokeStyle = MUNDOS[portalDe].obstCor; c.lineWidth = 3; c.beginPath(); c.arc(W / 2, H / 2, Math.min(raio, 130) + 8, 0, 7); c.stroke();
   c.restore();
   if (portalFx > .5) texto('PORTAL: ' + MUNDOS[portalPara].nome, W / 2, H / 2, 13, '#fff');
 }
