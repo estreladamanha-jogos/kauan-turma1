@@ -133,14 +133,16 @@ let t = 0, dist = 0, vel = BASE_V;
 let vidas = 3, invenc = 0, cristais = 0, shake = 0;
 const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [], amb = [], arvores = [];
+let galhos = [], neves = [], fogosCeu = [], fogosLado = [], estrelasCad = [];
 let spawnT = 1, gemT = 1;
 const keys = { left: false, right: false };
 let worldIdx = 0, portalPassados = [false, false, false], portalFx = 0, portalDe = 0, portalPara = 0;
-const timers = { leaf: 0, feather: 0, bird: 0, ice: 0, snowball: 0, flocos: 0, fire: 0, flame: 0, star: 0, rocket: -1, tree: 0 };
+const timers = { leaf: 0, feather: 0, bird: 0, ice: 0, snowball: 0, flocos: 0, fire: 0, flame: 0, star: 0, rocket: -1, tree: 0, galho: 0, neve: 0, fogoCeu: 0, fogoLado: 0, estrelaCad: 0 };
 
 function resetar() {
   estado = 'jogando'; t = 0; dist = 0; vidas = 3; invenc = 0; cristais = 0; shake = 0;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; amb = []; arvores = []; spawnT = 1; gemT = 1;
+  galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = [];
   worldIdx = 0; portalPassados = [false, false, false]; portalFx = 0;
   for (const k in timers) timers[k] = k === 'rocket' ? rnd(3, 6) : 0;
 }
@@ -339,6 +341,137 @@ function desenharArvores(dt) {
   }
 }
 
+/* ---------- perigos especiais de cada mundo ---------- */
+function spawnPerigos(dt) {
+  if (worldIdx === 0) { // floresta: galho com passaro que bica
+    if (timers.galho <= 0) {
+      galhos.push({ y: H + 60, lado: Math.random() < .5 ? -1 : 1, peckT: rnd(1.4, 2.2), peckOn: 0 });
+      timers.galho = rnd(5.5, 8);
+    }
+  } else if (worldIdx === 1) { // gelo: bolas grandes de neve caindo do céu
+    if (timers.neve <= 0) {
+      neves.push({ x: rnd(40, W - 40), y: -30, vy: rnd(140, 200), r: rnd(20, 28) });
+      timers.neve = rnd(1.3, 2.1);
+    }
+  } else if (worldIdx === 2) { // vulcão: fogos caindo do céu + fogos saindo pelos lados
+    if (timers.fogoCeu <= 0) {
+      fogosCeu.push({ x: rnd(30, W - 30), y: -20, vy: rnd(150, 210), r: rnd(9, 13) });
+      timers.fogoCeu = rnd(.5, .9);
+    }
+    if (timers.fogoLado <= 0) {
+      const lado = Math.random() < .5 ? -1 : 1;
+      fogosLado.push({ x: lado === -1 ? -20 : W + 20, y: rnd(80, 320), vx: lado * rnd(160, 220), r: 9 });
+      timers.fogoLado = rnd(1.1, 1.8);
+    }
+  } else if (worldIdx === 3) { // roxo: estrelas cadentes que tiram vida
+    if (timers.estrelaCad <= 0) {
+      estrelasCad.push({ x: rnd(30, W - 30), y: -20, vy: rnd(180, 240), vx: rnd(-30, 30), r: rnd(8, 11) });
+      timers.estrelaCad = rnd(.6, 1);
+    }
+  }
+
+  for (const g of galhos) {
+    g.y -= vel * dt; g.peckT -= dt;
+    if (g.peckT <= 0) { g.peckOn = .18; g.peckT = rnd(1.8, 2.6); }
+    if (g.peckOn > 0) g.peckOn -= dt;
+  }
+  galhos = galhos.filter(g => g.y > -80);
+
+  for (const n of neves) n.y += n.vy * dt;
+  neves = neves.filter(n => n.y < H + 40 && !n.morto);
+
+  for (const f of fogosCeu) f.y += f.vy * dt;
+  fogosCeu = fogosCeu.filter(f => f.y < H + 40 && !f.morto);
+
+  for (const f of fogosLado) f.x += f.vx * dt;
+  fogosLado = fogosLado.filter(f => f.x > -40 && f.x < W + 40 && !f.morto);
+
+  for (const s of estrelasCad) { s.y += s.vy * dt; s.x += s.vx * dt; }
+  estrelasCad = estrelasCad.filter(s => s.y < H + 40 && !s.morto);
+}
+
+function checarColisaoPerigos() {
+  const hit = (px, py, r) => invenc <= 0 && Math.abs(px - jog.x) < r + 16 && Math.abs(py - PY) < r + 26;
+
+  for (const g of galhos) {
+    if (g.peckOn > 0 && invenc <= 0) {
+      const tipX = g.lado === -1 ? W / 2 + 44 : W / 2 - 44;
+      if (Math.abs(jog.x - tipX) < 30 && Math.abs(PY - g.y) < 40) { levarDano(); return; }
+    }
+  }
+  for (const n of neves) if (!n.morto && hit(n.x, n.y, n.r)) { levarDano(n); return; }
+  for (const f of fogosCeu) if (!f.morto && hit(f.x, f.y, f.r)) { levarDano(f); return; }
+  for (const f of fogosLado) if (!f.morto && hit(f.x, f.y, f.r)) { levarDano(f); return; }
+  for (const s of estrelasCad) if (!s.morto && hit(s.x, s.y, s.r)) { levarDano(s); return; }
+}
+
+function desenharGalhos() {
+  for (const g of galhos) {
+    const bx0 = g.lado === -1 ? 0 : W / 2 - 20;
+    const bx1 = g.lado === -1 ? W / 2 + 20 : W;
+    c.save(); c.translate(0, g.y);
+    c.fillStyle = '#4a3320'; c.strokeStyle = '#2c1f13'; c.lineWidth = 2;
+    c.fillRect(bx0, -9, bx1 - bx0, 18); c.strokeRect(bx0, -9, bx1 - bx0, 18);
+    c.fillStyle = '#5aa06e';
+    for (let i = 0; i < 4; i++) { const fx = bx0 + (bx1 - bx0) * (i + .5) / 4; c.beginPath(); c.ellipse(fx, -15, 10, 6, 0, 0, 7); c.fill(); }
+    const openDir = g.lado === -1 ? 1 : -1;
+    const tipX = g.lado === -1 ? bx1 : bx0;
+    const peckOffset = g.peckOn > 0 ? openDir * 24 : 0;
+    c.save(); c.translate(tipX + peckOffset, -16); c.scale(openDir, 1);
+    c.fillStyle = '#e0553d'; c.beginPath(); c.ellipse(0, 0, 12, 9, 0, 0, 7); c.fill();
+    c.fillStyle = '#f4c542'; c.beginPath(); c.moveTo(10, -1); c.lineTo(21, 0); c.lineTo(10, 3); c.closePath(); c.fill();
+    c.fillStyle = '#222'; c.beginPath(); c.arc(4, -3, 1.6, 0, 7); c.fill();
+    c.restore();
+    c.restore();
+  }
+}
+
+function desenharNeves() {
+  for (const n of neves) {
+    c.save(); c.translate(n.x, n.y);
+    c.fillStyle = '#fff'; c.strokeStyle = '#cfe3ec'; c.lineWidth = 2;
+    c.beginPath(); c.arc(0, 0, n.r, 0, 7); c.fill(); c.stroke();
+    c.fillStyle = 'rgba(255,255,255,.5)'; c.beginPath(); c.arc(-n.r * .3, -n.r * .3, n.r * .4, 0, 7); c.fill();
+    c.restore();
+  }
+}
+
+function desenharFogosCeu() {
+  for (const f of fogosCeu) {
+    c.save(); c.translate(f.x, f.y);
+    const g = c.createRadialGradient(0, 0, 1, 0, 0, f.r * 1.8);
+    g.addColorStop(0, '#fff2b0'); g.addColorStop(.5, '#ff8a2a'); g.addColorStop(1, 'rgba(255,60,20,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, f.r * 1.8, 0, 7); c.fill();
+    c.fillStyle = '#ffcf4d'; c.beginPath(); c.arc(0, 0, f.r, 0, 7); c.fill();
+    c.restore();
+  }
+}
+
+function desenharFogosLado() {
+  for (const f of fogosLado) {
+    c.save(); c.translate(f.x, f.y);
+    const dir = f.vx > 0 ? 1 : -1; c.scale(dir, 1);
+    const g = c.createRadialGradient(0, 0, 1, 0, 0, f.r * 2);
+    g.addColorStop(0, '#fff2b0'); g.addColorStop(.5, '#ff6a2a'); g.addColorStop(1, 'rgba(255,60,20,0)');
+    c.fillStyle = g; c.beginPath(); c.arc(0, 0, f.r * 2, 0, 7); c.fill();
+    c.fillStyle = '#ff9a3d'; c.beginPath(); c.moveTo(-f.r * 2, -4); c.lineTo(-f.r * 4, 0); c.lineTo(-f.r * 2, 4); c.closePath(); c.fill();
+    c.fillStyle = '#ffe08f'; c.beginPath(); c.arc(f.r * .3, 0, f.r * .8, 0, 7); c.fill();
+    c.restore();
+  }
+}
+
+function desenharEstrelasCad() {
+  for (const s of estrelasCad) {
+    c.save(); c.translate(s.x, s.y); c.rotate(Math.atan2(s.vy, s.vx));
+    c.strokeStyle = 'rgba(255,255,255,.55)'; c.lineWidth = 3;
+    c.beginPath(); c.moveTo(-s.r * 4, 0); c.lineTo(0, 0); c.stroke();
+    c.fillStyle = '#fff'; c.beginPath();
+    for (let i = 0; i < 10; i++) { const a = i * Math.PI / 5 - Math.PI / 2; const rr = i % 2 === 0 ? s.r : s.r * .45; const px = Math.cos(a) * rr, py = Math.sin(a) * rr; if (i === 0) c.moveTo(px, py); else c.lineTo(px, py); }
+    c.closePath(); c.fill();
+    c.restore();
+  }
+}
+
 /* ---------- entrada ---------- */
 addEventListener('keydown', e => {
   const k = e.code;
@@ -370,7 +503,8 @@ function update(dt) {
     const limite = (i + 1) * MUNDO_M;
     if (!portalPassados[i] && metros >= limite) {
       portalPassados[i] = true; portalFx = 1.3; portalDe = worldIdx; portalPara = Math.min(3, i + 1);
-      amb = []; arvores = []; // limpa tudo do mundo anterior, nada atravessa o portal
+      // limpa tudo do mundo anterior, nada atravessa o portal
+      amb = []; arvores = []; galhos = []; neves = []; fogosCeu = []; fogosLado = []; estrelasCad = [];
     }
   }
   worldIdx = novoIdx;
@@ -384,6 +518,10 @@ function update(dt) {
   // ---- ambiente decorativo ----
   spawnAmbiente(dt);
   desenharArvores(dt);
+
+  // ---- perigos especiais de cada mundo ----
+  spawnPerigos(dt);
+  checarColisaoPerigos();
 
   // ---- obstáculos ----
   spawnT -= dt;
@@ -474,6 +612,11 @@ function desenhar() {
     c.fillStyle = '#fff'; c.beginPath(); c.moveTo(-1, -8); c.lineTo(3, -1); c.lineTo(-3, -1); c.fill(); c.restore();
   }
   for (const o of obst) desenharObstaculo(o);
+  desenharGalhos();
+  desenharNeves();
+  desenharFogosCeu();
+  desenharFogosLado();
+  desenharEstrelasCad();
 
   // ---- o Fagulha ----
   const piscando = invenc > 0 && Math.floor(t * 14) % 2 === 0;
