@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Dungeon Knight</title>
+  <!-- Phaser 3 pela CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #0b0b14; color: #e8e8f0; font-family: monospace; }
+    body { display: grid; grid-template-rows: auto 1fr auto; height: 100dvh; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
+    header { text-align: center; padding: 4px 8px; }
+    header h1 { margin: 0; font-size: 18px; color: #f5c518; letter-spacing: 2px; }
+    main { min-height: 0; display: flex; }
+    #game { flex: 1; min-height: 0; }
+    #game canvas { display: block; }
+    footer { padding: 6px 8px; text-align: center; font-size: 12px; color: #9a9ab5; }
+    /* Controles de toque: só aparecem em celular/tablet */
+    .touch { display: none; justify-content: space-between; gap: 8px; }
+    .touch div { display: flex; gap: 8px; }
+    .touch button { width: 72px; height: 60px; font-size: 24px; border: 2px solid #4a4a6a; border-radius: 12px; background: #1c1c30; color: #fff; touch-action: none; }
+    .touch button:active { background: #3b6fd6; }
+    @media (hover: none) and (pointer: coarse) {
+      .touch { display: flex; }
+      .dica { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>⚔ DUNGEON KNIGHT ⚔</h1>
+  </header>
+
+  <main>
+    <section id="game"></section>
+  </main>
+
+  <footer>
+    <p class="dica">← → / A D mover • ↑ / W / Espaço pular • Z / J atacar • Enter reinicia</p>
+    <section class="touch">
+      <div>
+        <button data-btn="left">◀</button>
+        <button data-btn="right">▶</button>
+      </div>
+      <div>
+        <button data-btn="attack">⚔</button>
+        <button data-btn="jump">⤒</button>
+      </div>
+    </section>
+  </footer>
+
+  <script>
+    // ===== Configurações do mundo =====
+    const W = 800, H = 450, TILE = 32;
+    const WORLD_W = 113 * TILE;
+    // Pedaços de chão: [tile inicial, quantidade de tiles]
+    const SEGS = [[0,14],[17,12],[32,10],[46,14],[64,12],[80,14],[98,15]];
+    // Plataformas no ar: [tile x, y em pixels, quantidade]
+    const PLATS = [[10,300,3],[20,300,3],[24,236,3],[36,300,3],[50,300,3],[54,236,3],
+                   [58,176,2],[70,300,4],[85,300,3],[90,236,3],[104,300,3]];
+    // Inimigos: [tipo, posição x]
+    const MOBS = [['slime',300],['slime',700],['skel',850],['slime',1150],['skel',1600],
+                  ['slime',1800],['slime',2200],['skel',2350],['skel',2700],['slime',2850],['skel',3200]];
+    const SPEED = 210, JUMP = 440;
+
+    // ===== Botões de toque =====
+    const touch = { left:false, right:false, jumpH:false, jumpP:false, atkP:false };
+    document.querySelectorAll('[data-btn]').forEach(b => {
+      const k = b.dataset.btn;
+      const down = e => {
+        e.preventDefault();
+        if (k === 'left') touch.left = true;
+        if (k === 'right') touch.right = true;
+        if (k === 'jump') { touch.jumpH = true; touch.jumpP = true; }
+        if (k === 'attack') touch.atkP = true;
+      };
+      const up = () => {
+        if (k === 'left') touch.left = false;
+        if (k === 'right') touch.right = false;
+        if (k === 'jump') touch.jumpH = false;
+      };
+      b.addEventListener('pointerdown', down);
+      ['pointerup','pointerleave','pointercancel'].forEach(ev => b.addEventListener(ev, up));
+    });
+
+    class DungeonScene extends Phaser.Scene {
+      constructor() { super('dungeon'); }
+
+      // Cria uma textura desenhando com retângulos (sem imagens externas!)
+      mk(key, w, h, fn) {
+        if (this.textures.exists(key)) return;
+        const g = this.make.graphics({ x:0, y:0, add:false });
+        fn(g);
+        g.generateTexture(key, w, h);
+        g.destroy();
+      }
+
+      makeTextures() {
+        const R = (g,c,x,y,w,h) => { g.fillStyle(c,1); g.fillRect(x,y,w,h); };
+        // Herói
+        this.mk('hero', 28, 32, g => {
+          R(g,0xb02a2a,2,12,5,13);           // capa
+          R(g,0x4a3020,6,28,6,4); R(g,0x4a3020,16,28,6,4); // botas
+          R(g,0x8a8fa0,7,22,5,6); R(g,0x8a8fa0,16,22,5,6); // pernas
+          R(g,0x3b6fd6,5,12,18,11);          // armadura
+          R(g,0x6b4423,5,20,18,2);           // cinto
+          R(g,0xf1c27d,8,4,12,9);            // rosto
+          R(g,0x9aa3b5,7,1,14,5);            // elmo
+          R(g,0x222222,16,7,2,2);            // olho
+          R(g,0xdfe6ee,23,8,3,14);           // lâmina
+          R(g,0xf5c518,21,21,7,2);           // cabo
+        });
+        // Slime
+        this.mk('slime', 28, 20, g => {
+          g.fillStyle(0x4ade80,1); g.fillEllipse(14,13,28,14); g.fillRect(0,13,28,7);
+          g.fillStyle(0x2f9e5a,1); g.fillRect(0,17,28,3);
+          R(g,0xffffff,16,8,5,5); R(g,0xffffff,7,8,5,5);
+          R(g,0x111111,18,10,3,3); R(g,0x111111,9,10,3,3);
+        });
+        // Esqueleto
+        this.mk('skel', 24, 34, g => {
+          R(g,0xe8e8e0,6,0,12,10); R(g,0x111111,8,4,3,3); R(g,0x111111,14,4,3,3);
+          R(g,0xe8e8e0,8,11,8,12); R(g,0x666666,8,14,8,1); R(g,0x666666,8,18,8,1);
+          R(g,0xe8e8e0,4,12,3,10); R(g,0xe8e8e0,17,12,3,10);
+          R(g,0xe8e8e0,8,23,3,11); R(g,0xe8e8e0,13,23,3,11);
+          R(g,0xaaaaaa,20,10,3,14);
+        });
+        // Blocos
+        this.mk('tile', 32, 32, g => {
+          R(g,0x4a4a5e,0,0,32,32); R(g,0x3f7d3a,0,0,32,6);
+          R(g,0x3a3a4c,0,16,32,2); R(g,0x3a3a4c,16,6,2,10); R(g,0x3a3a4c,8,18,2,14);
+        });
+        this.mk('dirt', 32, 32, g => { R(g,0x2e2e40,0,0,32,32); R(g,0x262636,0,15,32,2); });
+        // Fundo de tijolos
+        this.mk('brick', 64, 32, g => {
+          R(g,0x12121e,0,0,64,32); R(g,0x1c1c2c,0,0,64,2); R(g,0x1c1c2c,0,16,64,2);
+          R(g,0x1c1c2c,0,0,2,16); R(g,0x1c1c2c,32,16,2,16);
+        });
+        // Moeda e poção
+        this.mk('coin', 12, 12, g => { g.fillStyle(0xf5c518,1); g.fillCircle(6,6,6); g.fillStyle(0xffe680,1); g.fillCircle(5,5,3); });
+        this.mk('potion', 14, 16, g => { R(g,0x8a5a2b,5,0,4,4); R(g,0xdd2e44,2,5,10,10); R(g,0xff8899,4,7,2,4); });
+        // Porta
+        this.mk('door', 40, 56, g => {
+          R(g,0x6b4423,0,12,40,44); g.fillStyle(0x6b4423,1); g.fillEllipse(20,14,40,28);
+          R(g,0x2a1a0c,6,18,28,38); R(g,0xf5c518,17,34,6,8);
+        });
+        this.mk('door_open', 40, 56, g => {
+          R(g,0x6b4423,0,12,40,44); g.fillStyle(0x6b4423,1); g.fillEllipse(20,14,40,28);
+          R(g,0xffe9a8,6,18,28,38);
+        });
+        // Tocha, chama e brilho
+        this.mk('torch', 8, 22, g => { R(g,0x6b4423,3,6,3,16); R(g,0x888888,1,4,7,3); });
+        this.mk('flame', 10, 14, g => {
+          g.fillStyle(0xff8a1f,1); g.fillEllipse(5,9,10,14);
+          g.fillStyle(0xffd84d,1); g.fillEllipse(5,10,5,8);
+        });
+        this.mk('glow', 128, 128, g => {
+          for (let i = 0; i < 10; i++) { g.fillStyle(0xff9933,0.07); g.fillCircle(64,64,64 - i*6); }
+        });
+        // Golpe da espada
+        this.mk('slash', 48, 44, g => {
+          g.lineStyle(5,0xffffff,1); g.beginPath(); g.arc(0,22,40,-0.9,0.9); g.strokePath();
+        });
+      }
+
+      create() {
+        this.makeTextures();
+        this.physics.world.setBounds(0, 0, WORLD_W, 700);
+        // Estado do jogo
+        this.state = 'play';
+        this.hp = 100; this.maxHp = 100; this.lvl = 1; this.xp = 0; this.coins = 0;
+        this.bossDead = false; this.boss = null;
+        this.hurtUntil = 0; this.invUntil = 0; this.atkUntil = 0; this.nextAtk = 0;
+        this.facing = 1; this.jumpBuf = 0; this.lastGround = 0; this.doorMsg = 0;
+        this.safe = { x: 64, y: 320 };
+        this.hitSet = new Set();
+
+        // Fundo
+        this.bg = this.add.tileSprite(0, 0, W, H, 'brick').setOrigin(0).setScrollFactor(0).setDepth(-10);
+
+        // Tochas com brilho
+        for (let x = 300; x < WORLD_W; x += 380) {
+          this.add.image(x, 250, 'torch').setDepth(-5);
+          const f = this.add.image(x, 236, 'flame').setDepth(-4);
+          const gl = this.add.image(x, 236, 'glow').setDepth(-4).setBlendMode(Phaser.BlendModes.ADD).setAlpha(0.5);
+          this.tweens.add({ targets: f, scaleY: 1.3, duration: 150 + Math.random()*100, yoyo: true, repeat: -1 });
+          this.tweens.add({ targets: gl, alpha: 0.3, duration: 220 + Math.random()*120, yoyo: true, repeat: -1 });
+        }
+
+        // Chão e plataformas
+        this.plats = this.physics.add.staticGroup();
+        SEGS.forEach(([s, n]) => {
+          for (let i = 0; i < n; i++) {
+            const x = (s + i) * TILE + 16;
+            this.plats.create(x, 400, 'tile');
+            this.add.image(x, 432, 'dirt');
+          }
+        });
+        PLATS.forEach(([s, y, n]) => {
+          for (let i = 0; i < n; i++) this.plats.create((s + i) * TILE + 16, y + 16, 'tile');
+        });
+
+        // Herói
+        this.player = this.physics.add.sprite(64, 320, 'hero').setDepth(10);
+        this.player.setSize(18, 30).setOffset(5, 2).setCollideWorldBounds(true).setMaxVelocity(400, 700);
+        this.physics.add.collider(this.player, this.plats);
+
+        // Inimigos
+        this.enemies = this.physics.add.group();
+        this.physics.add.collider(this.enemies, this.plats);
+        MOBS.forEach(([t, x]) => this.spawnEnemy(t, x));
+        // Chefe no final
+        this.boss = this.spawnEnemy('skel', 3400, true);
+        this.physics.add.overlap(this.player, this.enemies, (pl, e) => {
+          if (e.hp > 0) this.hurtPlayer(e.dmg, e.x);
+        });
+
+        // Moedas e poções
+        this.items = this.physics.add.group({ allowGravity: false, immovable: true });
+        PLATS.forEach(([s, y, n]) => {
+          for (let i = 0; i < n; i++) this.dropItem((s + i) * TILE + 16, y - 16, 'coin');
+        });
+        for (let x = 600; x < WORLD_W - 200; x += 260) this.dropItem(x, 350, 'coin');
+        [1000, 1900, 2700].forEach(x => this.dropItem(x, 355, 'potion'));
+        this.physics.add.overlap(this.player, this.items, (pl, it) => this.collect(it));
+
+        // Porta de saída
+        this.door = this.physics.add.staticImage(WORLD_W - 70, 356, 'door').setDepth(1);
+        this.physics.add.overlap(this.player, this.door, () => this.touchDoor());
+
+        // Câmera
+        const cam = this.cameras.main;
+        cam.setBounds(0, 0, WORLD_W, H);
+        cam.startFollow(this.player, true, 0.1, 0.1);
+
+        // Teclas
+        this.cur = this.input.keyboard.createCursorKeys();
+        this.k = this.input.keyboard.addKeys('W,A,D,Z,J,X,ENTER');
+
+        // HUD
+        this.hud = this.add.graphics().setScrollFactor(0).setDepth(100);
+        const st = { fontFamily: 'monospace', fontSize: '14px', color: '#ffffff', stroke: '#000', strokeThickness: 3 };
+        this.txtHp = this.add.text(14, 8, '', st).setScrollFactor(0).setDepth(101);
+        this.txtLvl = this.add.text(14, 46, '', st).setScrollFactor(0).setDepth(101);
+        this.txtCoin = this.add.text(W - 14, 8, '', st).setOrigin(1, 0).setScrollFactor(0).setDepth(101);
+        const intro = this.add.text(W/2, 90, 'Derrote o chefe e chegue na porta!', { ...st, fontSize: '16px', color: '#f5c518' })
+          .setOrigin(0.5).setScrollFactor(0).setDepth(101);
+        this.tweens.add({ targets: intro, alpha: 0, delay: 3500, duration: 800 });
+      }
+
+      // Cria um inimigo
+      spawnEnemy(type, x, isBoss = false) {
+        const e = this.enemies.create(x, 340, type === 'slime' ? 'slime' : 'skel').setDepth(8);
+        const seg = this.segOf(x) || { x0: x - 100, x1: x + 100 };
+        e.type = type; e.isBoss = isBoss; e.hurtUntil = 0;
+        e.hp = isBoss ? 14 : (type === 'slime' ? 2 : 3);
+        e.dmg = isBoss ? 25 : (type === 'slime' ? 10 : 15);
+        e.xpGain = isBoss ? 10 : (type === 'slime' ? 1 : 2);
+        e.speed = isBoss ? 70 : (type === 'slime' ? 50 : 80);
+        e.chase = type !== 'slime';
+        e.sight = isBoss ? 420 : 220;
+        e.minX = Math.max(seg.x0 + 20, x - (isBoss ? 220 : 130));
+        e.maxX = Math.min(seg.x1 - 20, x + (isBoss ? 220 : 130));
+        e.dir = Math.random() < 0.5 ? -1 : 1;
+        e.setCollideWorldBounds(true);
+        if (isBoss) { e.setScale(2.2).setTint(0xff6666); e.y = 320; }
+        return e;
+      }
+
+      segOf(x) {
+        for (const [s, n] of SEGS) {
+          const x0 = s * TILE, x1 = (s + n) * TILE;
+          if (x >= x0 && x <= x1) return { x0, x1 };
+        }
+        return null;
+      }
+
+      dropItem(x, y, key) {
+        const it = this.items.create(x, y, key).setDepth(5);
+        it.kind = key;
+        this.tweens.add({ targets: it, y: y - 4, duration: 600, yoyo: true, repeat: -1 });
+      }
+
+      collect(it) {
+        if (it.kind === 'coin') { this.coins++; this.floatText(it.x, it.y - 10, '+1', '#f5c518'); }
+        else { this.hp = Math.min(this.maxHp, this.hp + 30); this.floatText(it.x, it.y - 10, '+30 HP', '#ff6b81'); }
+        it.destroy();
+      }
+
+      floatText(x, y, str, color) {
+        const t = this.add.text(x, y, str, { fontFamily: 'monospace', fontSize: '14px', color, stroke: '#000', strokeThickness: 3 })
+          .setOrigin(0.5).setDepth(50);
+        this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 800, onComplete: () => t.destroy() });
+      }
+
+      burst(x, y, color, n = 8) {
+        for (let i = 0; i < n; i++) {
+          const r = this.add.rectangle(x, y, 4, 4, color).setDepth(30);
+          this.tweens.add({
+            targets: r, x: x + Phaser.Math.Between(-30, 30), y: y + Phaser.Math.Between(-35, 10),
+            alpha: 0, duration: 350, onComplete: () => r.destroy()
+          });
+        }
+      }
+
+      // Jogador toma dano
+      hurtPlayer(dmg, fromX) {
+        const now = this.time.now;
+        if (now < this.invUntil || this.state !== 'play') return;
+        this.hp -= dmg;
+        this.invUntil = now + 900;
+        this.hurtUntil = now + 250;
+        const p = this.player;
+        p.setVelocity(p.x < fromX ? -220 : 220, -240);
+        this.cameras.main.shake(100, 0.01);
+        this.floatText(p.x, p.y - 30, '-' + dmg, '#ff4d4d');
+        this.burst(p.x, p.y, 0xdd2e44);
+        if (this.hp <= 0) { this.hp = 0; this.die(); }
+      }
+
+      die() {
+        this.state = 'dead';
+        this.player.setTint(0x555555).setVelocityX(0);
+        this.showEnd('VOCÊ MORREU', 'Aperte Enter ou ⚔ para tentar de novo', '#ff4d4d');
+      }
+
+      showEnd(title, sub, color) {
+        this.add.rectangle(W/2, H/2, W, H, 0x000000, 0.6).setScrollFactor(0).setDepth(200);
+        this.add.text(W/2, H/2 - 20, title, { fontFamily: 'monospace', fontSize: '36px', color, stroke: '#000', strokeThickness: 5 })
+          .setOrigin(0.5).setScrollFactor(0).setDepth(201);
+        this.add.text(W/2, H/2 + 24, sub, { fontFamily: 'monospace', fontSize: '15px', color: '#ffffff' })
+          .setOrigin(0.5).setScrollFactor(0).setDepth(201);
+      }
+
+      // Jogador bate no inimigo
+      hitEnemy(e) {
+        const now = this.time.now;
+        const dmg = this.lvl;
+        e.hp -= dmg;
+        e.hurtUntil = now + 220;
+        e.setVelocity(this.facing * (e.isBoss ? 60 : 180), -140);
+        e.setTintFill(0xffffff);
+        this.time.delayedCall(80, () => {
+          if (!e.active) return;
+          e.clearTint();
+          if (e.isBoss) e.setTint(0xff6666);
+        });
+        this.burst(e.x, e.y, e.type === 'slime' ? 0x4ade80 : 0xe8e8e0);
+        this.floatText(e.x, e.y - 30, '-' + dmg, '#ffffff');
+        if (e.hp <= 0) this.killEnemy(e);
+      }
+
+      killEnemy(e) {
+        this.burst(e.x, e.y, 0xffffff, 14);
+        if (Math.random() < 0.6) this.dropItem(e.x, e.y - 10, 'coin');
+        this.gainXp(e.xpGain);
+        if (e.isBoss) {
+          this.bossDead = true;
+          this.door.setTexture('door_open');
+          this.floatText(e.x, e.y - 50, 'CHEFE DERROTADO!', '#f5c518');
+        }
+        e.destroy();
+      }
+
+      gainXp(n) {
+        this.xp += n;
+        const need = 4 * this.lvl;
+        if (this.xp >= need) {
+          this.xp -= need; this.lvl++;
+          this.maxHp += 20; this.hp = this.maxHp;
+          this.floatText(this.player.x, this.player.y - 50, 'LEVEL UP!', '#f5c518');
+        }
+      }
+
+      touchDoor() {
+        if (this.state !== 'play') return;
+        const now = this.time.now;
+        if (this.bossDead) {
+          this.state = 'win';
+          this.player.setVelocityX(0);
+          this.showEnd('VITÓRIA!', 'Moedas: ' + this.coins + ' • Nível ' + this.lvl + ' — Enter para jogar de novo', '#f5c518');
+        } else if (now > this.doorMsg) {
+          this.doorMsg = now + 1500;
+          this.floatText(this.door.x, this.door.y - 50, 'Derrote o chefe!', '#ff9933');
+        }
+      }
+
+      // Caiu no buraco: perde vida e volta pro último chão seguro
+      fall() {
+        const now = this.time.now;
+        this.hp -= 25;
+        this.floatText(this.safe.x, this.safe.y - 30, '-25', '#ff4d4d');
+        this.player.setPosition(this.safe.x, this.safe.y).setVelocity(0, 0);
+        this.invUntil = now + 1200;
+        if (this.hp <= 0) { this.hp = 0; this.die(); }
+      }
+
+      checkHits() {
+        const p = this.player;
+        this.enemies.getChildren().slice().forEach(e => {
+          if (!e.active || this.hitSet.has(e)) return;
+          const dx = (e.x - p.x) * this.facing;
+          const reach = 60 + e.displayWidth / 2;
+          if (dx > -10 && dx < reach && Math.abs(e.y - p.y) < 20 + e.displayHeight / 2) {
+            this.hitSet.add(e);
+            this.hitEnemy(e);
+          }
+        });
+      }
+
+      drawHud() {
+        const g = this.hud;
+        g.clear();
+        g.fillStyle(0x000000, 0.6); g.fillRect(10, 6, 160, 20);
+        g.fillStyle(0xdd2e44, 1); g.fillRect(12, 8, 156 * (this.hp / this.maxHp), 16);
+        const need = 4 * this.lvl;
+        g.fillStyle(0x000000, 0.6); g.fillRect(10, 44, 160, 8);
+        g.fillStyle(0x3b9cff, 1); g.fillRect(12, 46, 156 * (this.xp / need), 4);
+        this.txtHp.setText('HP ' + this.hp + '/' + this.maxHp);
+        this.txtLvl.setPosition(14, 56).setText('NÍVEL ' + this.lvl);
+        this.txtCoin.setText('MOEDAS ' + this.coins);
+        // Barra do chefe
+        const b = this.boss;
+        if (b && b.active && Math.abs(b.x - this.player.x) < 500) {
+          g.fillStyle(0x000000, 0.6); g.fillRect(W/2 - 100, 40, 200, 12);
+          g.fillStyle(0xff4d4d, 1); g.fillRect(W/2 - 98, 42, 196 * (b.hp / 14), 8);
+        }
+      }
+
+      update(time) {
+        const p = this.player;
+        this.bg.tilePositionX = this.cameras.main.scrollX * 0.3;
+        this.drawHud();
+
+        // Fim de jogo: reinicia
+        if (this.state !== 'play') {
+          if (Phaser.Input.Keyboard.JustDown(this.k.ENTER) || Phaser.Input.Keyboard.JustDown(this.k.Z) || touch.atkP) {
+            touch.atkP = false;
+            this.scene.restart();
+          }
+          return;
+        }
+
+        const c = this.cur, k = this.k;
+        const left = c.left.isDown || k.A.isDown || touch.left;
+        const right = c.right.isDown || k.D.isDown || touch.right;
+        const onFloor = p.body.blocked.down;
+        if (onFloor) this.lastGround = time;
+        const hurt = time < this.hurtUntil;
+
+        // Andar
+        if (!hurt) {
+          p.setVelocityX(((right ? 1 : 0) - (left ? 1 : 0)) * SPEED);
+          if (left && !right) this.facing = -1;
+          else if (right && !left) this.facing = 1;
+        }
+
+        // Pular (com um pouquinho de tolerância)
+        const jumpPress = Phaser.Input.Keyboard.JustDown(c.up) || Phaser.Input.Keyboard.JustDown(k.W) ||
+                          Phaser.Input.Keyboard.JustDown(c.space) || touch.jumpP;
+        const jumpHold = c.up.isDown || k.W.isDown || c.space.isDown || touch.jumpH;
+        if (jumpPress) this.jumpBuf = time;
+        if (time - this.jumpBuf < 120 && time - this.lastGround < 100 && !hurt) {
+          p.setVelocityY(-JUMP);
+          this.jumpBuf = 0; this.lastGround = 0;
+        }
+        // Soltou o botão: pulo mais baixo
+        if (!jumpHold && p.body.velocity.y < -180 && !hurt) p.setVelocityY(-180);
+
+        // Atacar
+        const atk = Phaser.Input.Keyboard.JustDown(k.Z) || Phaser.Input.Keyboard.JustDown(k.J) ||
+                    Phaser.Input.Keyboard.JustDown(k.X) || touch.atkP;
+        if (atk && time > this.nextAtk) {
+          this.nextAtk = time + 320;
+          this.atkUntil = time + 160;
+          this.hitSet = new Set();
+          this.slashImg = this.add.image(p.x + this.facing * 14, p.y, 'slash')
+            .setOrigin(0, 0.5).setFlipX(this.facing < 0).setDepth(11);
+          this.tweens.add({ targets: this.slashImg, alpha: 0, duration: 170, onComplete: () => this.slashImg.destroy() });
+        }
+        if (time < this.atkUntil) this.checkHits();
+        if (this.slashImg && this.slashImg.active) this.slashImg.setPosition(p.x + this.facing * 14, p.y);
+
+        // Visual do herói
+        p.setFlipX(this.facing < 0);
+        const walking = onFloor && Math.abs(p.body.velocity.x) > 10;
+        p.angle = time < this.atkUntil ? this.facing * 12 : (walking ? Math.sin(time * 0.02) * 4 : 0);
+        p.alpha = time < this.invUntil ? (Math.floor(time / 80) % 2 ? 0.4 : 1) : 1;
+
+        // Guarda o último chão seguro
+        if (onFloor && p.y > 330) {
+          const s = this.segOf(p.x);
+          if (s) this.safe = { x: Phaser.Math.Clamp(p.x, s.x0 + 48, s.x1 - 48), y: 340 };
+        }
+        if (p.y > 520) this.fall();
+
+        // IA dos inimigos
+        this.enemies.getChildren().forEach(e => {
+          if (!e.active || time < e.hurtUntil) return;
+          const dx = p.x - e.x;
+          let vx;
+          if (e.chase && Math.abs(dx) < e.sight && Math.abs(p.y - e.y) < 90) {
+            e.dir = dx < 0 ? -1 : 1;
+            vx = e.dir * e.speed;
+          } else {
+            if (e.x <= e.minX) e.dir = 1;
+            else if (e.x >= e.maxX) e.dir = -1;
+            vx = e.dir * e.speed * 0.5;
+          }
+          if ((vx < 0 && e.x <= e.minX) || (vx > 0 && e.x >= e.maxX)) vx = 0;
+          e.setVelocityX(vx);
+          e.setFlipX(e.dir < 0);
+        });
+
+        // Limpa os toques de um frame só
+        touch.jumpP = false;
+        touch.atkP = false;
+      }
+    }
+
+    new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: 'game',
+      width: W,
+      height: H,
+      backgroundColor: '#0b0b14',
+      pixelArt: true,
+      physics: { default: 'arcade', arcade: { gravity: { y: 950 }, debug: false } },
+      scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
+      scene: [DungeonScene]
+    });
+  </script>
+</body>
+</html>
