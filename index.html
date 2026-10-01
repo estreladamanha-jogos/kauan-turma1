@@ -10,12 +10,15 @@
     * { box-sizing: border-box; }
     html, body { margin: 0; height: 100%; background: #0b0b14; color: #e8e8f0; font-family: monospace; }
     body { display: grid; grid-template-rows: auto 1fr auto; height: 100dvh; overflow: hidden; touch-action: none; user-select: none; -webkit-user-select: none; }
-    header { text-align: center; padding: 4px 8px; }
+    header { position: relative; text-align: center; padding: 4px 8px; }
     header h1 { margin: 0; font-size: 18px; color: #f5c518; letter-spacing: 2px; }
     main { min-height: 0; display: flex; }
     #game { flex: 1; min-height: 0; }
     #game canvas { display: block; }
     footer { padding: 6px 8px; text-align: center; font-size: 12px; color: #9a9ab5; }
+    footer p { margin: 0; }
+    /* Botão de pausa no topo */
+    .btn-pausa { position: absolute; right: 8px; top: 2px; width: 44px; height: 32px; font-size: 16px; color: #fff; background: #1c1c30; border: 2px solid #4a4a6a; border-radius: 8px; cursor: pointer; }
     /* Controles de toque: só aparecem em celular/tablet */
     .touch { display: none; justify-content: space-between; gap: 8px; }
     .touch div { display: flex; gap: 8px; }
@@ -25,11 +28,25 @@
       .touch { display: flex; }
       .dica { display: none; }
     }
+    /* Telas por cima do jogo (início, pausa, como jogar) */
+    .tela { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 16px; background: rgba(5, 5, 12, 0.93); text-align: center; overflow: auto; }
+    .tela[hidden] { display: none; }
+    .tela h2 { margin: 0; color: #f5c518; letter-spacing: 2px; }
+    .tela p { margin: 0; color: #c8c8dc; }
+    .menu { display: flex; flex-direction: column; gap: 12px; width: min(340px, 100%); }
+    .btn { padding: 12px 16px; font: inherit; font-size: 16px; color: #fff; background: #1c1c30; border: 2px solid #4a4a6a; border-radius: 10px; cursor: pointer; }
+    .btn:hover, .btn:focus-visible { background: #3b6fd6; }
+    .opcao { display: flex; flex-direction: column; gap: 4px; text-align: left; font-size: 14px; }
+    .opcao input[type=range] { width: 100%; }
+    .opcao.check { flex-direction: row; align-items: center; gap: 8px; }
+    .lista { text-align: left; line-height: 1.7; font-size: 14px; max-width: 440px; list-style: none; padding: 0; margin: 0; }
+    .lista b { color: #f5c518; }
   </style>
 </head>
 <body>
   <header>
     <h1>⚔ DUNGEON KNIGHT ⚔</h1>
+    <button class="btn-pausa" id="btnPausa" aria-label="Pausar">⏸</button>
   </header>
 
   <main>
@@ -37,7 +54,7 @@
   </main>
 
   <footer>
-    <p class="dica">← → / A D mover • ↑ / W / Espaço pular • Z / J atacar • Enter reinicia</p>
+    <p class="dica">← → / A D mover • ↑ / W / Espaço pular • Z / J / X / R atacar • Esc / P pausa</p>
     <section class="touch">
       <div>
         <button data-btn="left">◀</button>
@@ -50,6 +67,55 @@
     </section>
   </footer>
 
+  <!-- Tela inicial -->
+  <section class="tela" id="telaInicial">
+    <h2>⚔ DUNGEON KNIGHT ⚔</h2>
+    <p>Derrote slimes, esqueletos e zumbis. Vença o chefe e abra a porta!</p>
+    <nav class="menu">
+      <button class="btn" id="btnJogar">▶ Jogar</button>
+      <button class="btn" id="btnComoInicial">Como jogar</button>
+    </nav>
+  </section>
+
+  <!-- Menu de pausa -->
+  <section class="tela" id="telaPausa" hidden>
+    <h2>PAUSADO</h2>
+    <nav class="menu">
+      <button class="btn" id="btnContinuar">▶ Continuar o jogo</button>
+      <label class="opcao">Volume da música
+        <input type="range" id="volMusica" min="0" max="100" value="50">
+      </label>
+      <label class="opcao">Volume dos efeitos
+        <input type="range" id="volEfeitos" min="0" max="100" value="70">
+      </label>
+      <label class="opcao check">
+        <input type="checkbox" id="mudo"> Desligar todos os sons
+      </label>
+      <button class="btn" id="btnComo">Como jogar</button>
+      <button class="btn" id="btnSair">Sair para tela inicial</button>
+    </nav>
+  </section>
+
+  <!-- Como jogar -->
+  <section class="tela" id="telaComo" hidden>
+    <h2>COMO JOGAR</h2>
+    <ul class="lista">
+      <li><b>Andar:</b> ← → ou A D</li>
+      <li><b>Pular:</b> ↑, W ou Espaço (segure para pular mais alto)</li>
+      <li><b>Atacar:</b> Z, J, X ou R</li>
+      <li><b>Pausar:</b> Esc ou P (ou o botão ⏸)</li>
+      <li><b>Recomeçar:</b> Enter quando morrer ou vencer</li>
+      <li><b>Celular:</b> use os botões na tela</li>
+      <li><b>Moedas</b> dão pontos, <b>poções</b> curam 30 de vida</li>
+      <li><b>Matar monstros</b> dá XP: ao subir de nível você fica mais forte</li>
+      <li><b>Buracos</b> tiram vida. Cuidado!</li>
+      <li><b>Objetivo:</b> derrote o chefe e entre na porta</li>
+    </ul>
+    <nav class="menu">
+      <button class="btn" id="btnVoltar">← Voltar</button>
+    </nav>
+  </section>
+
   <script>
     // ===== Configurações do mundo =====
     const W = 800, H = 450, TILE = 32;
@@ -60,9 +126,90 @@
     const PLATS = [[10,300,3],[20,300,3],[24,236,3],[36,300,3],[50,300,3],[54,236,3],
                    [58,176,2],[70,300,4],[85,300,3],[90,236,3],[104,300,3]];
     // Inimigos: [tipo, posição x]
-    const MOBS = [['slime',300],['slime',700],['skel',850],['slime',1150],['skel',1600],
-                  ['slime',1800],['slime',2200],['skel',2350],['skel',2700],['slime',2850],['skel',3200]];
+    const MOBS = [['slime',300],['zombie',400],['slime',700],['skel',850],['slime',1150],['zombie',1250],
+                  ['skel',1600],['zombie',1700],['slime',1800],['slime',2200],['zombie',2250],['skel',2350],
+                  ['skel',2700],['zombie',2800],['slime',2850],['skel',3200],['zombie',3500]];
+    // Atributos de cada tipo de inimigo
+    const MOB = {
+      slime:  { key:'slime',  hp:2, dmg:10, xp:1, speed:50, chase:false, sight:0,   cor:0x4ade80 },
+      skel:   { key:'skel',   hp:3, dmg:15, xp:2, speed:80, chase:true,  sight:220, cor:0xe8e8e0 },
+      zombie: { key:'zombie', hp:4, dmg:12, xp:3, speed:45, chase:true,  sight:260, cor:0x7aa05a }
+    };
     const SPEED = 210, JUMP = 440;
+
+    // Estado geral: começa na tela inicial
+    const jogo = { iniciado: false, pausado: false };
+
+    // ===== Sons feitos no código (sem arquivos) =====
+    const LEAD = [220,0,261.6,0,329.6,0,261.6,0, 196,0,246.9,0,293.7,0,246.9,0];
+    const BASS = [55, 65.41, 49, 55];
+    const Som = {
+      ctx: null, musica: 0.5, efeitos: 0.7, mudo: false, timer: null, passo: 0, prox: 0,
+      // Liga o áudio (precisa de um clique do jogador)
+      init() {
+        if (this.ctx) { if (this.ctx.state === 'suspended') this.ctx.resume(); return; }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.gM = this.ctx.createGain(); this.gE = this.ctx.createGain();
+        this.gM.connect(this.ctx.destination); this.gE.connect(this.ctx.destination);
+        this.aplicar();
+      },
+      // Aplica os volumes
+      aplicar() {
+        if (!this.ctx) return;
+        this.gM.gain.value = this.mudo ? 0 : this.musica * 0.25;
+        this.gE.gain.value = this.mudo ? 0 : this.efeitos * 0.5;
+      },
+      // Toca um tom (frequência inicial -> final)
+      tom(f, f2, dur, tipo, vol, dest, t) {
+        const c = this.ctx, o = c.createOscillator(), g = c.createGain();
+        o.type = tipo;
+        o.frequency.setValueAtTime(f, t);
+        if (f2) o.frequency.exponentialRampToValueAtTime(f2, t + dur);
+        g.gain.setValueAtTime(vol, t);
+        g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+        o.connect(g); g.connect(dest);
+        o.start(t); o.stop(t + dur + 0.02);
+      },
+      sfx(nome) {
+        if (!this.ctx) return;
+        const t = this.ctx.currentTime, d = this.gE;
+        switch (nome) {
+          case 'ataque': this.tom(500, 150, 0.12, 'sawtooth', 0.4, d, t); break;
+          case 'golpe': this.tom(180, 60, 0.15, 'square', 0.6, d, t); break;
+          case 'morte': this.tom(300, 40, 0.3, 'sawtooth', 0.6, d, t); break;
+          case 'zumbi': this.tom(90, 50, 0.4, 'sawtooth', 0.5, d, t); break;
+          case 'pulo': this.tom(250, 550, 0.15, 'square', 0.3, d, t); break;
+          case 'moeda': this.tom(988, 988, 0.08, 'square', 0.3, d, t); this.tom(1319, 1319, 0.15, 'square', 0.3, d, t + 0.07); break;
+          case 'pocao': this.tom(400, 800, 0.25, 'sine', 0.5, d, t); break;
+          case 'dano': this.tom(220, 60, 0.3, 'sawtooth', 0.7, d, t); break;
+          case 'gameover': this.tom(300, 40, 0.9, 'sawtooth', 0.7, d, t); break;
+          case 'nivel': [523, 659, 784, 1047].forEach((f, i) => this.tom(f, f, 0.15, 'square', 0.3, d, t + i * 0.1)); break;
+          case 'vitoria': [523, 659, 784, 1047, 1319].forEach((f, i) => this.tom(f, f, 0.25, 'square', 0.3, d, t + i * 0.15)); break;
+        }
+      },
+      // Música em loop
+      tocar() {
+        if (!this.ctx || this.timer) return;
+        this.prox = this.ctx.currentTime + 0.1;
+        this.timer = setInterval(() => {
+          while (this.prox < this.ctx.currentTime + 0.5) {
+            this.nota(this.passo++, this.prox);
+            this.prox += 0.28;
+          }
+        }, 100);
+      },
+      nota(i, t) {
+        const lead = LEAD[i % 16];
+        if (lead) this.tom(lead, null, 0.25, 'triangle', 0.5, this.gM, t);
+        if (i % 4 === 0) {
+          this.tom(BASS[Math.floor(i / 4) % 4], null, 1.0, 'square', 0.35, this.gM, t);
+          this.tom(120, 40, 0.12, 'sine', 0.7, this.gM, t);
+        }
+      },
+      parar() { clearInterval(this.timer); this.timer = null; }
+    };
 
     // ===== Botões de toque =====
     const touch = { left:false, right:false, jumpH:false, jumpP:false, atkP:false };
@@ -137,6 +284,22 @@
           R(g,0xe8e8e0,4,12,3,10); R(g,0xe8e8e0,17,12,3,10);
           R(g,0xe8e8e0,8,23,3,11); R(g,0xe8e8e0,13,23,3,11);
           R(g,0xaaaaaa,20,10,3,14);
+        });
+        // Zumbi: pele verde, roupa rasgada e braços esticados
+        this.mk('zombie', 30, 38, g => {
+          R(g,0x2a2a3a,8,26,5,10); R(g,0x2a2a3a,16,26,5,10);   // calça rasgada
+          R(g,0x1a1210,7,36,7,2); R(g,0x1a1210,15,36,7,2);     // sapatos
+          R(g,0x7a8a5a,8,34,5,2);                              // canela de fora
+          R(g,0x5a4a3a,7,13,15,14);                            // camisa
+          R(g,0x7aa05a,7,22,5,5);                              // barriga de fora
+          R(g,0x8a1f1f,10,17,4,2);                             // ferida
+          R(g,0x7aa05a,8,2,13,11);                             // cabeça
+          R(g,0x2a2a1a,8,2,13,3);                              // cabelo
+          R(g,0xffee66,16,6,3,3); R(g,0x111111,18,7,1,1);      // olho
+          R(g,0x2a1010,15,10,6,1);                             // boca
+          R(g,0x7aa05a,21,14,9,4);                             // braço esticado
+          R(g,0x5f8a42,27,13,3,6);                             // mão
+          R(g,0x7aa05a,2,16,6,4);                              // braço de trás
         });
         // Blocos
         this.mk('tile', 32, 32, g => {
@@ -246,9 +409,9 @@
         cam.setBounds(0, 0, WORLD_W, H);
         cam.startFollow(this.player, true, 0.1, 0.1);
 
-        // Teclas
+        // Teclas (R também ataca)
         this.cur = this.input.keyboard.createCursorKeys();
-        this.k = this.input.keyboard.addKeys('W,A,D,Z,J,X,ENTER');
+        this.k = this.input.keyboard.addKeys('W,A,D,Z,J,X,R,ENTER');
 
         // HUD
         this.hud = this.add.graphics().setScrollFactor(0).setDepth(100);
@@ -258,20 +421,25 @@
         this.txtCoin = this.add.text(W - 14, 8, '', st).setOrigin(1, 0).setScrollFactor(0).setDepth(101);
         const intro = this.add.text(W/2, 90, 'Derrote o chefe e chegue na porta!', { ...st, fontSize: '16px', color: '#f5c518' })
           .setOrigin(0.5).setScrollFactor(0).setDepth(101);
-        this.tweens.add({ targets: intro, alpha: 0, delay: 3500, duration: 800 });
+        // O aviso só some depois que o jogo começar
+        this.introTween = this.tweens.add({ targets: intro, alpha: 0, delay: 3500, duration: 800, paused: !jogo.iniciado });
+
+        // Na tela inicial a física fica parada
+        if (!jogo.iniciado) this.physics.world.pause();
       }
 
       // Cria um inimigo
       spawnEnemy(type, x, isBoss = false) {
-        const e = this.enemies.create(x, 340, type === 'slime' ? 'slime' : 'skel').setDepth(8);
+        const m = MOB[type];
+        const e = this.enemies.create(x, 340, m.key).setDepth(8);
         const seg = this.segOf(x) || { x0: x - 100, x1: x + 100 };
-        e.type = type; e.isBoss = isBoss; e.hurtUntil = 0;
-        e.hp = isBoss ? 14 : (type === 'slime' ? 2 : 3);
-        e.dmg = isBoss ? 25 : (type === 'slime' ? 10 : 15);
-        e.xpGain = isBoss ? 10 : (type === 'slime' ? 1 : 2);
-        e.speed = isBoss ? 70 : (type === 'slime' ? 50 : 80);
-        e.chase = type !== 'slime';
-        e.sight = isBoss ? 420 : 220;
+        e.type = type; e.isBoss = isBoss; e.hurtUntil = 0; e.cor = m.cor;
+        e.hp = isBoss ? 14 : m.hp;
+        e.dmg = isBoss ? 25 : m.dmg;
+        e.xpGain = isBoss ? 10 : m.xp;
+        e.speed = isBoss ? 70 : m.speed;
+        e.chase = m.chase;
+        e.sight = isBoss ? 420 : m.sight;
         e.minX = Math.max(seg.x0 + 20, x - (isBoss ? 220 : 130));
         e.maxX = Math.min(seg.x1 - 20, x + (isBoss ? 220 : 130));
         e.dir = Math.random() < 0.5 ? -1 : 1;
@@ -295,8 +463,8 @@
       }
 
       collect(it) {
-        if (it.kind === 'coin') { this.coins++; this.floatText(it.x, it.y - 10, '+1', '#f5c518'); }
-        else { this.hp = Math.min(this.maxHp, this.hp + 30); this.floatText(it.x, it.y - 10, '+30 HP', '#ff6b81'); }
+        if (it.kind === 'coin') { this.coins++; Som.sfx('moeda'); this.floatText(it.x, it.y - 10, '+1', '#f5c518'); }
+        else { this.hp = Math.min(this.maxHp, this.hp + 30); Som.sfx('pocao'); this.floatText(it.x, it.y - 10, '+30 HP', '#ff6b81'); }
         it.destroy();
       }
 
@@ -325,6 +493,7 @@
         this.hurtUntil = now + 250;
         const p = this.player;
         p.setVelocity(p.x < fromX ? -220 : 220, -240);
+        Som.sfx('dano');
         this.cameras.main.shake(100, 0.01);
         this.floatText(p.x, p.y - 30, '-' + dmg, '#ff4d4d');
         this.burst(p.x, p.y, 0xdd2e44);
@@ -333,6 +502,7 @@
 
       die() {
         this.state = 'dead';
+        Som.sfx('gameover');
         this.player.setTint(0x555555).setVelocityX(0);
         this.showEnd('VOCÊ MORREU', 'Aperte Enter ou ⚔ para tentar de novo', '#ff4d4d');
       }
@@ -358,13 +528,15 @@
           e.clearTint();
           if (e.isBoss) e.setTint(0xff6666);
         });
-        this.burst(e.x, e.y, e.type === 'slime' ? 0x4ade80 : 0xe8e8e0);
+        Som.sfx(e.type === 'zombie' ? 'zumbi' : 'golpe');
+        this.burst(e.x, e.y, e.cor);
         this.floatText(e.x, e.y - 30, '-' + dmg, '#ffffff');
         if (e.hp <= 0) this.killEnemy(e);
       }
 
       killEnemy(e) {
         this.burst(e.x, e.y, 0xffffff, 14);
+        Som.sfx('morte');
         if (Math.random() < 0.6) this.dropItem(e.x, e.y - 10, 'coin');
         this.gainXp(e.xpGain);
         if (e.isBoss) {
@@ -381,6 +553,7 @@
         if (this.xp >= need) {
           this.xp -= need; this.lvl++;
           this.maxHp += 20; this.hp = this.maxHp;
+          Som.sfx('nivel');
           this.floatText(this.player.x, this.player.y - 50, 'LEVEL UP!', '#f5c518');
         }
       }
@@ -390,6 +563,7 @@
         const now = this.time.now;
         if (this.bossDead) {
           this.state = 'win';
+          Som.sfx('vitoria');
           this.player.setVelocityX(0);
           this.showEnd('VITÓRIA!', 'Moedas: ' + this.coins + ' • Nível ' + this.lvl + ' — Enter para jogar de novo', '#f5c518');
         } else if (now > this.doorMsg) {
@@ -402,6 +576,7 @@
       fall() {
         const now = this.time.now;
         this.hp -= 25;
+        Som.sfx('dano');
         this.floatText(this.safe.x, this.safe.y - 30, '-25', '#ff4d4d');
         this.player.setPosition(this.safe.x, this.safe.y).setVelocity(0, 0);
         this.invUntil = now + 1200;
@@ -445,6 +620,9 @@
         this.bg.tilePositionX = this.cameras.main.scrollX * 0.3;
         this.drawHud();
 
+        // Tela inicial: nada se mexe
+        if (!jogo.iniciado) return;
+
         // Fim de jogo: reinicia
         if (this.state !== 'play') {
           if (Phaser.Input.Keyboard.JustDown(this.k.ENTER) || Phaser.Input.Keyboard.JustDown(this.k.Z) || touch.atkP) {
@@ -475,18 +653,20 @@
         if (jumpPress) this.jumpBuf = time;
         if (time - this.jumpBuf < 120 && time - this.lastGround < 100 && !hurt) {
           p.setVelocityY(-JUMP);
+          Som.sfx('pulo');
           this.jumpBuf = 0; this.lastGround = 0;
         }
         // Soltou o botão: pulo mais baixo
         if (!jumpHold && p.body.velocity.y < -180 && !hurt) p.setVelocityY(-180);
 
-        // Atacar
+        // Atacar (Z, J, X ou R)
         const atk = Phaser.Input.Keyboard.JustDown(k.Z) || Phaser.Input.Keyboard.JustDown(k.J) ||
-                    Phaser.Input.Keyboard.JustDown(k.X) || touch.atkP;
+                    Phaser.Input.Keyboard.JustDown(k.X) || Phaser.Input.Keyboard.JustDown(k.R) || touch.atkP;
         if (atk && time > this.nextAtk) {
           this.nextAtk = time + 320;
           this.atkUntil = time + 160;
           this.hitSet = new Set();
+          Som.sfx('ataque');
           this.slashImg = this.add.image(p.x + this.facing * 14, p.y, 'slash')
             .setOrigin(0, 0.5).setFlipX(this.facing < 0).setDepth(11);
           this.tweens.add({ targets: this.slashImg, alpha: 0, duration: 170, onComplete: () => this.slashImg.destroy() });
@@ -531,7 +711,7 @@
       }
     }
 
-    new Phaser.Game({
+    const game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game',
       width: W,
@@ -541,6 +721,70 @@
       physics: { default: 'arcade', arcade: { gravity: { y: 950 }, debug: false } },
       scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_BOTH },
       scene: [DungeonScene]
+    });
+
+    // ===== Menus (início, pausa, como jogar) =====
+    const $ = id => document.getElementById(id);
+    const telas = [$('telaInicial'), $('telaPausa'), $('telaComo')];
+    let comoVolta = null; // de onde o jogador abriu o "como jogar"
+    const cena = () => game.scene.getScene('dungeon');
+    const mostrar = t => telas.forEach(x => { x.hidden = x !== t; });
+    const esconderTodas = () => telas.forEach(x => { x.hidden = true; });
+    const limparToque = () => { touch.left = touch.right = touch.jumpH = touch.jumpP = touch.atkP = false; };
+
+    // Começa o jogo
+    function jogar() {
+      Som.init(); Som.tocar();
+      jogo.iniciado = true; jogo.pausado = false;
+      esconderTodas();
+      const s = cena();
+      s.physics.world.resume();
+      if (s.introTween) s.introTween.resume();
+    }
+    // Pausa o jogo
+    function pausar() {
+      if (!jogo.iniciado || jogo.pausado) return;
+      jogo.pausado = true;
+      limparToque();
+      game.scene.pause('dungeon');
+      mostrar($('telaPausa'));
+    }
+    // Continua o jogo
+    function continuar() {
+      jogo.pausado = false;
+      esconderTodas();
+      game.scene.resume('dungeon');
+    }
+    // Volta pra tela inicial
+    function sair() {
+      jogo.iniciado = false; jogo.pausado = false;
+      Som.parar(); limparToque();
+      game.scene.stop('dungeon');
+      game.scene.start('dungeon');
+      mostrar($('telaInicial'));
+    }
+    function abrirComo(origem) { comoVolta = origem; mostrar($('telaComo')); }
+
+    $('btnJogar').addEventListener('click', jogar);
+    $('btnComoInicial').addEventListener('click', () => abrirComo($('telaInicial')));
+    $('btnContinuar').addEventListener('click', continuar);
+    $('btnComo').addEventListener('click', () => abrirComo($('telaPausa')));
+    $('btnVoltar').addEventListener('click', () => mostrar(comoVolta));
+    $('btnSair').addEventListener('click', sair);
+    $('btnPausa').addEventListener('click', () => (jogo.pausado ? continuar() : pausar()));
+
+    // Volumes e mudo
+    $('volMusica').addEventListener('input', e => { Som.musica = e.target.value / 100; Som.aplicar(); });
+    $('volEfeitos').addEventListener('input', e => { Som.efeitos = e.target.value / 100; Som.aplicar(); });
+    $('mudo').addEventListener('change', e => { Som.mudo = e.target.checked; Som.aplicar(); });
+
+    // Esc ou P pausam / continuam
+    window.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' && e.key !== 'p' && e.key !== 'P') return;
+      if (!jogo.iniciado) return;
+      if (!$('telaComo').hidden) mostrar(comoVolta);
+      else if (jogo.pausado) continuar();
+      else pausar();
     });
   </script>
 </body>
