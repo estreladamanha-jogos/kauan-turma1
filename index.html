@@ -98,18 +98,30 @@
 
       makeTextures() {
         const R = (g,c,x,y,w,h) => { g.fillStyle(c,1); g.fillRect(x,y,w,h); };
-        // Herói
-        this.mk('hero', 28, 32, g => {
-          R(g,0xb02a2a,2,12,5,13);           // capa
-          R(g,0x4a3020,6,28,6,4); R(g,0x4a3020,16,28,6,4); // botas
-          R(g,0x8a8fa0,7,22,5,6); R(g,0x8a8fa0,16,22,5,6); // pernas
-          R(g,0x3b6fd6,5,12,18,11);          // armadura
-          R(g,0x6b4423,5,20,18,2);           // cinto
-          R(g,0xf1c27d,8,4,12,9);            // rosto
-          R(g,0x9aa3b5,7,1,14,5);            // elmo
-          R(g,0x222222,16,7,2,2);            // olho
-          R(g,0xdfe6ee,23,8,3,14);           // lâmina
-          R(g,0xf5c518,21,21,7,2);           // cabo
+        // Herói encapuzado: capuz e manto pretos, rosto escondido na sombra
+        this.mk('hero', 32, 40, g => {
+          R(g,0x08080c,4,18,5,16);                 // capa de trás
+          R(g,0x1a1210,10,36,5,4); R(g,0x1a1210,17,36,5,4); // botas
+          R(g,0x0d0d12,6,34,20,3);                 // barra do manto
+          R(g,0x7a1f2b,6,36,20,1);                 // detalhe vermelho na barra
+          R(g,0x0d0d12,7,30,18,4);                 // saia do manto
+          R(g,0x14141c,8,22,16,8);                 // corpo do manto
+          R(g,0x22222e,8,22,2,8);                  // luz na borda do manto
+          R(g,0x14141c,8,17,16,6);                 // ombros
+          R(g,0x22222e,8,17,16,1);                 // luz nos ombros
+          R(g,0x3a2a1a,9,27,14,2);                 // cinto
+          R(g,0x8a7a4a,15,27,3,2);                 // fivela
+          g.fillStyle(0x0b0b10,1); g.fillTriangle(5,13,12,3,14,18); // ponta do capuz atrás
+          g.fillStyle(0x0b0b10,1); g.fillEllipse(16,10,20,20);      // capuz
+          g.fillStyle(0x2a2a38,1); g.fillEllipse(19,10,13,14);      // borda do capuz
+          g.fillStyle(0x000000,1); g.fillEllipse(19,10,11,12);      // rosto na sombra
+          R(g,0x9ad7ff,18,9,2,1); R(g,0x9ad7ff,22,9,2,1);          // brilho dos olhos
+          R(g,0x14141c,20,20,6,4);                 // braço
+          R(g,0xcfd8e3,25,10,3,18);                // lâmina da espada
+          R(g,0xffffff,26,10,1,18);                // brilho da lâmina
+          R(g,0xcfd8e3,25,8,3,2);                  // ponta
+          R(g,0x8a6b2a,23,27,8,2);                 // guarda
+          R(g,0x4a3020,25,29,3,4);                 // cabo
         });
         // Slime
         this.mk('slime', 28, 20, g => {
@@ -203,7 +215,7 @@
 
         // Herói
         this.player = this.physics.add.sprite(64, 320, 'hero').setDepth(10);
-        this.player.setSize(18, 30).setOffset(5, 2).setCollideWorldBounds(true).setMaxVelocity(400, 700);
+        this.player.setSize(18, 36).setOffset(7, 4).setCollideWorldBounds(true).setMaxVelocity(400, 700);
         this.physics.add.collider(this.player, this.plats);
 
         // Inimigos
