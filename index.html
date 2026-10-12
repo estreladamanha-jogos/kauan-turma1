@@ -18,6 +18,16 @@
 <div class="touch"><div class="g"><button id="tE">◀</button><button id="tD">▶</button></div><div class="g"><button id="tQ">🔁</button><button id="tP">⚡</button></div></div>
 <script>
 // =============================================================
+// CHANGELOG  v2.1
+//  ✅ novo: MELHOR TEMPO — ao vencer mostra o tempo total (mm:ss) e
+//     salva o melhor tempo no localStorage, só atualiza se for menor
+//     (aparece também na tela inicial)
+// =============================================================
+// CHANGELOG  v2.0
+//  ✅ novo: FÚRIA DO CHEFÃO — com 1 de 3 pontos de núcleo (último ponto),
+//     chefão fica vermelho e atira 3 bolas em leque a cada 1,4s
+//     (só o dash continua machucando o núcleo)
+// =============================================================
 // CHANGELOG  v1.9
 //  ✅ novo: VITÓRIA PERFEITA — se chegar ao fim sem perder nenhuma vida
 //     de verdade, mostra "PERFEITO ⭐" e a luz do peito dourada
@@ -264,6 +274,9 @@ let janelaSF = 0, fogoSuper = false, imaT = 0;   // super fogo (janela após o d
 let ativo = 0;
 let msgTxt = '', msgT = 0;
 let boss = null, tiros = [];
+let tempo = 0, tempoFinal = 0;                      // cronômetro da partida (só conta jogando)
+let melhorTempo = Number(localStorage.getItem('fagulha_melhor_tempo')) || 0;   // 0 = ainda não tem recorde
+function formatarTempo(s) { const m = Math.floor(s / 60), ss = Math.floor(s % 60); return m + ':' + (ss < 10 ? '0' : '') + ss; }
 
 function resetar() {
   estado = 'jogando'; t = 0; dist = 0; vidas = 3; lentoT = 0; invenc = 0; cristais = 0; cristaisVida = 0; shake = 0; perfeito = true;
@@ -274,6 +287,7 @@ function resetar() {
   dashT = fogoT = escudoT = imaT = 0; janelaSF = 0; fogoSuper = false; ghosts = [];
   ativo = 0;
   boss = null; tiros = [];
+  tempo = 0; tempoFinal = 0;                        // zera o cronômetro ao jogar de novo
 }
 
 /* ---------- obstáculos ---------- */
@@ -414,7 +428,7 @@ addEventListener('keyup', e => {
 /* ---------- atualização ---------- */
 function update(dt) {
   if (estado !== 'jogando') return;
-  t += dt;
+  t += dt; tempo += dt;
   vel = BASE_V * MULT[Math.min(mundo, 3)];
   if (boss) vel = 170;
   dist += vel * dt;
@@ -554,7 +568,13 @@ function atualizarBoss(dt) {
   if (toca) {
     if (b.fase === 'nucleo' && dashT > 0 && b.stun <= 0) {
       b.core--; b.stun = 1.2; b.flash = .6; shake = .25; burst(b.x, b.y, '#ff5aa0', 26, 240);
-      if (b.core <= 0) { estado = 'vitoria'; }   // no 3º dash o chefão cai
+      if (b.core <= 0) {
+        estado = 'vitoria'; tempoFinal = tempo;             // guarda o tempo total da partida
+        if (melhorTempo <= 0 || tempoFinal < melhorTempo) {
+          melhorTempo = tempoFinal;
+          localStorage.setItem('fagulha_melhor_tempo', String(melhorTempo));
+        }
+      }   // no 3º dash o chefão cai
     } else if (dashT <= 0 && invenc <= 0) levarDano(null);
   }
 }
@@ -703,6 +723,7 @@ function telas() {
     texto('FAGULHA', W / 2, 150, 34, '#ffe9a8');
     texto('QUEDA ENTRE MUNDOS', W / 2, 200, 12, '#7af6ff');
     drawFagulha(c, W / 2, 345, .9, performance.now() / 1000, { pose: 'stand' });
+    if (melhorTempo > 0) texto('MELHOR TEMPO: ' + formatarTempo(melhorTempo), W / 2, 460, 10, '#ffd84a');
     if (Math.floor(performance.now() / 500) % 2) texto('APERTE ESPAÇO', W / 2, 520, 14, '#fff');
   } else if (estado === 'gameover') {
     c.fillStyle = 'rgba(30,0,10,.78)'; c.fillRect(0, 0, W, H);
@@ -719,6 +740,7 @@ function telas() {
       drawFagulha(c, W / 2, 300, .95, performance.now() / 1000, { pose: 'cheer', glow: '#7CFF9E' });
     }
     texto('💎 ' + cristais, W / 2, 470, 16, '#7af6ff');
+    texto('⏱ ' + formatarTempo(tempoFinal), W / 2, 500, 14, '#fff');
     if (Math.floor(performance.now() / 500) % 2) texto('ESPAÇO: JOGAR DE NOVO', W / 2, 540, 11, '#fff');
   }
 }
