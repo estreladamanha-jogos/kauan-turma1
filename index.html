@@ -18,6 +18,10 @@
 <div class="touch"><div class="g"><button id="tE">◀</button><button id="tD">▶</button></div><div class="g"><button id="tQ">🔁</button><button id="tP">⚡</button></div></div>
 <script>
 // =============================================================
+// CHANGELOG  v1.6
+//  ✅ novo: a cada 20 cristais ganha +1 vida, até o máximo de 5 corações
+//     (os cristais continuam contando mesmo com vida cheia, só não dão vida extra)
+// =============================================================
 // CHANGELOG  v1.5
 //  ✅ novo: SUPER FOGO — usar fogo até 0,8s depois do dash dobra o alcance
 //     e conta como 2 chamas na casca de gelo do chefão
@@ -236,7 +240,7 @@ const rnd = (a, b) => a + Math.random() * (b - a);
 let estado = 'inicio';          // inicio | jogando | gameover | vitoria
 let t = 0, dist = 0, vel = BASE_V;
 let lentoT = 0, mortes = 0;
-let vidas = VIDAS, invenc = 0, cristais = 0, shake = 0;
+let vidas = VIDAS, invenc = 0, cristais = 0, cristaisVida = 0, shake = 0;
 const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [];
 let spawnT = 1, gemT = 1;
@@ -252,7 +256,7 @@ let msgTxt = '', msgT = 0;
 let boss = null, tiros = [];
 
 function resetar() {
-  estado = 'jogando'; t = 0; dist = 0; vidas = VIDAS; lentoT = 0; invenc = 0; cristais = 0; shake = 0;
+  estado = 'jogando'; t = 0; dist = 0; vidas = VIDAS; lentoT = 0; invenc = 0; cristais = 0; cristaisVida = 0; shake = 0;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; spawnT = 1; gemT = 1;
   mundo = MUNDO_INICIAL; dist = mundo * TAM_MUNDO * 10; bannerT = mundo > 0 ? 2 : 0;
   transT = 0;
@@ -460,7 +464,11 @@ function update(dt) {
     if (dd > 0 && dd < 160) { const f = 420 * dt; g.x += dx / dd * f; g.y += dy / dd * f; }
   }
   gems = gems.filter(g => {
-    if (Math.abs(g.x - jog.x) < 28 && Math.abs(g.y - (PY + 4)) < 44) { cristais++; burst(g.x, g.y, '#7af6ff', 8, 90); return false; }
+    if (Math.abs(g.x - jog.x) < 28 && Math.abs(g.y - (PY + 4)) < 44) {
+      cristais++; cristaisVida++;                       // a cada 20 cristais, +1 vida (máx. 5 corações)
+      if (cristaisVida >= 20) { cristaisVida = 0; if (vidas < VIDAS) vidas++; }
+      burst(g.x, g.y, '#7af6ff', 8, 90); return false;
+    }
     return g.y > -30;
   });
 
