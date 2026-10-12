@@ -522,8 +522,18 @@ function atualizarBoss(dt) {
   b.x = W / 2 + Math.sin(t * .9) * 120;
   b.y = b.fase === 'nucleo' ? 350 + Math.sin(t * 1.5) * 95 : 430 + Math.sin(t * 1.7) * 10;
   // tiros: sobem em direção ao Fagulha
+  const furia = b.fase === 'nucleo' && b.core === 1;   // FÚRIA: último ponto do núcleo (1 de 3)
   b.atk -= dt;
-  if (b.atk <= 0) { tiros.push({ x: b.x, y: b.y - 40, vx: clamp((jog.x - b.x) * .35, -110, 110), vy: -250 }); b.atk = b.fase === 'nucleo' ? 1.5 : 2.1; }
+  if (b.atk <= 0) {
+    const baseVx = clamp((jog.x - b.x) * .35, -110, 110);
+    if (furia) {
+      for (const off of [-140, 0, 140]) tiros.push({ x: b.x, y: b.y - 40, vx: clamp(baseVx + off, -260, 260), vy: -250 });   // 3 bolas em leque
+      b.atk = 1.4;
+    } else {
+      tiros.push({ x: b.x, y: b.y - 40, vx: baseVx, vy: -250 });
+      b.atk = b.fase === 'nucleo' ? 1.5 : 2.1;
+    }
+  }
   for (const s of tiros) {
     s.x += s.vx * dt; s.y += s.vy * dt;
     if (Math.abs(s.x - jog.x) < 22 && Math.abs(s.y - PY) < 34 && !s.morto) {
@@ -626,8 +636,11 @@ function desenhar() {
 function desenharBoss() {
   if (!boss) return;
   const b = boss; c.save(); c.translate(b.x, b.y);
+  const furia = b.fase === 'nucleo' && b.core === 1;   // FÚRIA: último ponto do núcleo, chefão fica vermelho
   if (b.stun > 0 && Math.floor(t * 16) % 2) c.globalAlpha = .55;
-  const g = c.createRadialGradient(0, 0, 8, 0, 0, 80); g.addColorStop(0, '#ffb3d9'); g.addColorStop(.5, '#e0287a'); g.addColorStop(1, '#5a0f3a');
+  const g = c.createRadialGradient(0, 0, 8, 0, 0, 80);
+  if (furia) { g.addColorStop(0, '#ff9a9a'); g.addColorStop(.5, '#c81e1e'); g.addColorStop(1, '#4a0505'); }
+  else { g.addColorStop(0, '#ffb3d9'); g.addColorStop(.5, '#e0287a'); g.addColorStop(1, '#5a0f3a'); }
   c.fillStyle = g; c.beginPath(); c.ellipse(0, 0, 66, 54, 0, 0, 7); c.fill();
   c.strokeStyle = '#2a0620'; c.lineWidth = 3; c.stroke();
   c.fillStyle = '#fff'; c.beginPath(); c.arc(-22, -8, 10, 0, 7); c.arc(22, -8, 10, 0, 7); c.fill();
