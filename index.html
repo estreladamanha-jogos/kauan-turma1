@@ -22,7 +22,7 @@
 //  ✅ corrigido: começava já com 5 corações; agora começa com 1 e os
 //     corações só aparecem conforme os cristais vão sendo coletados
 //  ✅ corrigido: trocar de mundo também dava coração extra; agora só
-//     os cristais (20 em 20) dão coração
+//     os cristais (5 em 5) dão coração
 // =============================================================
 // CHANGELOG  v1.6
 //  ✅ novo: a cada 20 cristais ganha +1 vida, até o máximo de 5 corações
@@ -235,7 +235,7 @@ const BASE_V = 230;             // velocidade da queda no mundo 1 (pixels por se
 const META = 1000;              // profundidade final (em metros). 1 metro = 10 pixels
 const TAM_MUNDO = 250;          // cada mundo tem 250 m (4 mundos = 1000 m, depois vem o chefão)
 const MUNDO_INICIAL = 0;        // para TESTAR um mundo direto: troque por 1, 2 ou 3 (e volte pra 0 no final!)
-const VIDAS = 5;                   // vidas máximas (começa com 1, só sobe coletando 20 cristais por vez)
+const VIDAS = 5;                   // vidas máximas (começa com 1, só sobe coletando 5 cristais por vez)
 const PISCAR = 1.7;                 // segundos de invencibilidade depois de levar dano
 const CD = { dash: 2, fogo: 4, escudo: 10, ima: 10 };   // recarga de cada poder (segundos)
 const MULT = [1, 1.20, 1.40, 1.60];   // velocidade de cada mundo, sempre em relação ao mundo 1
@@ -471,8 +471,8 @@ function update(dt) {
   }
   gems = gems.filter(g => {
     if (Math.abs(g.x - jog.x) < 28 && Math.abs(g.y - (PY + 4)) < 44) {
-      cristais++; cristaisVida++;                       // a cada 20 cristais, +1 vida (máx. 5 corações)
-      if (cristaisVida >= 20) { cristaisVida = 0; if (vidas < VIDAS) vidas++; }
+      cristais++; cristaisVida++;                       // a cada 5 cristais, +1 vida (máx. 5 corações)
+      if (cristaisVida >= 5) { cristaisVida = 0; if (vidas < VIDAS) vidas++; }
       burst(g.x, g.y, '#7af6ff', 8, 90); return false;
     }
     return g.y > -30;
