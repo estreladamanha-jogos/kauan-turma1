@@ -18,6 +18,11 @@
 <div class="touch"><div class="g"><button id="tE">◀</button><button id="tD">▶</button></div><div class="g"><button id="tQ">🔁</button><button id="tP">⚡</button></div></div>
 <script>
 // =============================================================
+// CHANGELOG  v1.5
+//  ✅ novo: SUPER FOGO — usar fogo até 0,8s depois do dash dobra o alcance
+//     e conta como 2 chamas na casca de gelo do chefão
+//  ✅ novo: poder IMÃ (Q) — 4s puxando cristais até 160px, nunca obstáculos/tiros, recarga 10s
+// =============================================================
 // CHANGELOG  v1.4
 //  ✅ corrigido: cada golpe tirava 2 vidas em vez de 1 (tiro do chefão)
 //  ✅ corrigido: vidas nunca ficam negativas
@@ -222,7 +227,7 @@ const TAM_MUNDO = 250;          // cada mundo tem 250 m (4 mundos = 1000 m, depo
 const MUNDO_INICIAL = 0;        // para TESTAR um mundo direto: troque por 1, 2 ou 3 (e volte pra 0 no final!)
 const VIDAS = 5;                   // vidas máximas (ganha +1 ao entrar em cada mundo novo)
 const PISCAR = 1.7;                 // segundos de invencibilidade depois de levar dano
-const CD = { dash: 2, fogo: 4, escudo: 10 };   // recarga de cada poder (segundos)
+const CD = { dash: 2, fogo: 4, escudo: 10, ima: 10 };   // recarga de cada poder (segundos)
 const MULT = [1, 1.20, 1.40, 1.60];   // velocidade de cada mundo, sempre em relação ao mundo 1
 const _sig = 'F5-KAUAN-42F';  // não apague
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -239,8 +244,9 @@ const keys = { left: false, right: false };
 let mundo = MUNDO_INICIAL;
 let bannerT = 0;
 let transT = 0, mundoAnt = 0;
-const cd = { dash: 0, fogo: 0, escudo: 0 };
+const cd = { dash: 0, fogo: 0, escudo: 0, ima: 0 };
 let dashT = 0, dashDir = 1, fogoT = 0, escudoT = 0, ghosts = [];
+let janelaSF = 0, fogoSuper = false, imaT = 0;   // super fogo (janela após o dash) e imã
 let ativo = 0;
 let msgTxt = '', msgT = 0;
 let boss = null, tiros = [];
@@ -250,8 +256,8 @@ function resetar() {
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; spawnT = 1; gemT = 1;
   mundo = MUNDO_INICIAL; dist = mundo * TAM_MUNDO * 10; bannerT = mundo > 0 ? 2 : 0;
   transT = 0;
-  if (mortes < 3) cd.dash = cd.fogo = cd.escudo = 0; else cd.dash = CD.dash;
-  dashT = fogoT = escudoT = 0; ghosts = [];
+  if (mortes < 3) cd.dash = cd.fogo = cd.escudo = cd.ima = 0; else cd.dash = CD.dash;
+  dashT = fogoT = escudoT = imaT = 0; janelaSF = 0; fogoSuper = false; ghosts = [];
   ativo = 0;
   boss = null; tiros = [];
 }
@@ -336,25 +342,33 @@ const PODERES = [
   { id: 'dash', nome: 'DASH', ico: '💨', cor: '#00e5ff', cd: CD.dash },
   { id: 'fogo', nome: 'FOGO', ico: '🔥', cor: '#ff8a3a', cd: CD.fogo },
   { id: 'escudo', nome: 'ESCUDO', ico: '🛡️', cor: '#7CFF9E', cd: CD.escudo },
+  { id: 'ima', nome: 'IMÃ', ico: '🧲', cor: '#ff6fd8', cd: CD.ima },
 ];
 function usar(id) {
   if (estado !== 'jogando' || cd[id] > 0) return;
   const p = PODERES.find(q => q.id === id); if (!p) return;
   cd[id] = p.cd;
   if (id === 'dash') { dashT = 0.28; dashDir = jog.dir || 1; }              // recarga 2s, imune enquanto dura
-  if (id === 'fogo') { fogoT = 0.55; }                                     // recarga 4s
+  if (id === 'fogo') {                                                     // recarga 4s
+    fogoT = 0.55;
+    fogoSuper = janelaSF > 0;                 // dentro de 0,8s após o dash: super fogo (2x alcance, conta 2 na casca)
+    if (fogoSuper) { janelaSF = 0; msgTxt = 'SUPER FOGO!'; msgT = 1.3; }
+  }
   if (id === 'escudo') { escudoT = 5; }                                    // recarga 10s, dura 5s ou 1 golpe
+  if (id === 'ima') { imaT = 4; }                                          // recarga 10s, dura 4s, puxa só cristais
 }
 function corDoPoder() {
   if (dashT > 0) return '#00e5ff';
-  if (fogoT > 0) return '#ff8a3a';
+  if (fogoT > 0) return fogoSuper ? '#fff2a0' : '#ff8a3a';
   if (escudoT > 0) return '#7CFF9E';
+  if (imaT > 0) return '#ff6fd8';
   return PODERES[ativo].cor;
 }
 /* o fogo REAGE ao mundo: queima galho, derrete gelo, mas lava é imune e no espaço não tem ar */
 function alcanceFogo() {
   if (mundo === 3) return 30;
-  return 260 * Math.min(1, (0.55 - fogoT) / 0.18 + .25);
+  const L = 260 * Math.min(1, (0.55 - fogoT) / 0.18 + .25);
+  return fogoSuper ? L * 2 : L;                // super fogo: alcance dobrado
 }
 function fogoAtinge(o) {
   const dy = o.y - (PY + 26), L = alcanceFogo();
@@ -406,10 +420,13 @@ function update(dt) {
     dashT -= dt; jog.x = clamp(jog.x + dashDir * velocidadeLenta * dt, 34, W - 34);
     ghosts.push({ x: jog.x, y: PY, life: .3 });
     if (Math.random() < .8) burst(jog.x, PY + 20, '#00e5ff', 1, 60);
+    if (dashT <= 0) janelaSF = 0.8;           // dash acabou: abre a janela de 0,8s pro super fogo
   }
   ghosts = ghosts.filter(g => (g.life -= dt) > 0);
+  if (janelaSF > 0) janelaSF -= dt;
   if (escudoT > 0) escudoT -= dt;
-  if (fogoT > 0) fogoT -= dt;
+  if (fogoT > 0) { fogoT -= dt; if (fogoT <= 0) fogoSuper = false; }
+  if (imaT > 0) imaT -= dt;
   if (msgT > 0) msgT -= dt;
 
   // ---- mundos: portais a cada 250 m ----
@@ -438,6 +455,10 @@ function update(dt) {
   gemT -= dt;
   if (gemT <= 0 && !boss) { gems.push({ x: rnd(40, W - 40), y: H + 30 }); gemT = .75; }
   for (const g of gems) g.y -= vel * dt;
+  if (imaT > 0) for (const g of gems) {                 // imã só puxa cristais, nunca obstáculos ou tiros
+    const dx = jog.x - g.x, dy = (PY + 4) - g.y, dd = Math.hypot(dx, dy);
+    if (dd > 0 && dd < 160) { const f = 420 * dt; g.x += dx / dd * f; g.y += dy / dd * f; }
+  }
   gems = gems.filter(g => {
     if (Math.abs(g.x - jog.x) < 28 && Math.abs(g.y - (PY + 4)) < 44) { cristais++; burst(g.x, g.y, '#7af6ff', 8, 90); return false; }
     return g.y > -30;
@@ -495,7 +516,8 @@ function atualizarBoss(dt) {
   tiros = tiros.filter(s => !s.morto && s.y > -30);
   // fogo derrete a casca de gelo do chefão (precisa de 3 chamas)
   if (b.fase === 'armadura' && fogoT > 0 && b.flash <= 0 && Math.abs(b.x - jog.x) < b.w / 2 + 30 && b.y < PY + 26 + 270) {
-    b.armor--; b.flash = .5; burst(b.x, b.y - 30, '#bfefff', 18, 200);
+    b.armor -= fogoSuper ? 2 : 1;             // super fogo conta como 2 chamas
+    b.flash = .5; burst(b.x, b.y - 30, '#bfefff', 18, 200);
     if (b.armor <= 0) { b.fase = 'nucleo'; bannerT = 2; }
   }
   // dash bate no núcleo exposto (precisa de 3 dashes); encostar sem dash machuca o Fagulha
