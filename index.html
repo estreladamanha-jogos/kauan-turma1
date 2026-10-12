@@ -18,6 +18,11 @@
 <div class="touch"><div class="g"><button id="tE">◀</button><button id="tD">▶</button></div><div class="g"><button id="tQ">🔁</button><button id="tP">⚡</button></div></div>
 <script>
 // =============================================================
+// CHANGELOG  v1.9
+//  ✅ novo: VITÓRIA PERFEITA — se chegar ao fim sem perder nenhuma vida
+//     de verdade, mostra "PERFEITO ⭐" e a luz do peito dourada
+//     (golpe absorvido pelo escudo não conta como perder vida)
+// =============================================================
 // CHANGELOG  v1.8
 //  ✅ ajustado: começa com 3 corações, até 5 no total, ganhando +1 a
 //     cada 20 cristais coletados (no máximo 2 vezes)
@@ -245,6 +250,7 @@ let estado = 'inicio';          // inicio | jogando | gameover | vitoria
 let t = 0, dist = 0, vel = BASE_V;
 let lentoT = 0, mortes = 0;
 let vidas = 3, invenc = 0, cristais = 0, cristaisVida = 0, shake = 0;   // começa com 3 corações
+let perfeito = true;   // vitória perfeita: fica true até perder 1ª vida de verdade (escudo não conta)
 const jog = { x: W / 2, vx: 0, dir: 1 };
 let obst = [], gems = [], fx = [];
 let spawnT = 1, gemT = 1;
@@ -260,7 +266,7 @@ let msgTxt = '', msgT = 0;
 let boss = null, tiros = [];
 
 function resetar() {
-  estado = 'jogando'; t = 0; dist = 0; vidas = 3; lentoT = 0; invenc = 0; cristais = 0; cristaisVida = 0; shake = 0;
+  estado = 'jogando'; t = 0; dist = 0; vidas = 3; lentoT = 0; invenc = 0; cristais = 0; cristaisVida = 0; shake = 0; perfeito = true;
   jog.x = W / 2; jog.vx = 0; obst = []; gems = []; fx = []; spawnT = 1; gemT = 1;
   mundo = MUNDO_INICIAL; dist = mundo * TAM_MUNDO * 10; bannerT = mundo > 0 ? 2 : 0;
   transT = 0;
@@ -502,8 +508,9 @@ function update(dt) {
 /* cada golpe tira sempre exatamente 1 vida, e a vida nunca fica negativa */
 function levarDano(o) {
   if (o && o.tp === 'gelo') { lentoT = 2; o.morto = true; burst(o.x, o.y, '#bfefff', 14, 140); return; }   // gelo não tira vida, só deixa lento
-  if (escudoT > 0) { escudoT = 0; invenc = .6; burst(jog.x, PY, '#7CFF9E', 22, 200); if (o) o.morto = true; return; }
+  if (escudoT > 0) { escudoT = 0; invenc = .6; burst(jog.x, PY, '#7CFF9E', 22, 200); if (o) o.morto = true; return; }   // escudo absorve, não conta como perder vida
   vidas = Math.max(0, vidas - 1); invenc = PISCAR; shake = .3; burst(jog.x, PY, '#ff5577', 16, 180);
+  perfeito = false;
   if (o) o.morto = true;
   if (vidas <= 0) { estado = 'gameover'; mortes++; }
 }
@@ -691,8 +698,13 @@ function telas() {
     if (Math.floor(performance.now() / 500) % 2) texto('ESPAÇO: JOGAR DE NOVO', W / 2, 400, 11, '#fff');
   } else if (estado === 'vitoria') {
     c.fillStyle = 'rgba(0,20,10,.78)'; c.fillRect(0, 0, W, H);
-    texto('CHEGOU AO FUNDO!', W / 2, 170, 20, '#7CFF9E');
-    drawFagulha(c, W / 2, 300, .95, performance.now() / 1000, { pose: 'cheer', glow: '#7CFF9E' });
+    if (perfeito) {
+      texto('PERFEITO ⭐', W / 2, 170, 20, '#ffd84a');
+      drawFagulha(c, W / 2, 300, .95, performance.now() / 1000, { pose: 'cheer', glow: '#ffd84a' });   // luz do peito dourada
+    } else {
+      texto('CHEGOU AO FUNDO!', W / 2, 170, 20, '#7CFF9E');
+      drawFagulha(c, W / 2, 300, .95, performance.now() / 1000, { pose: 'cheer', glow: '#7CFF9E' });
+    }
     texto('💎 ' + cristais, W / 2, 470, 16, '#7af6ff');
     if (Math.floor(performance.now() / 500) % 2) texto('ESPAÇO: JOGAR DE NOVO', W / 2, 540, 11, '#fff');
   }
