@@ -275,7 +275,7 @@ let ativo = 0;
 let msgTxt = '', msgT = 0;
 let boss = null, tiros = [];
 let tempo = 0, tempoFinal = 0;                      // cronômetro da partida (só conta jogando)
-let melhorTempo = Number(localStorage.getItem('fagulha_melhor_tempo')) || 0;   // 0 = ainda não tem recorde
+let melhorTempo = Number(localStorage.getItem('fagulha-melhor-tempo')) || 0;   // 0 = ainda não tem recorde
 function formatarTempo(s) { const m = Math.floor(s / 60), ss = Math.floor(s % 60); return m + ':' + (ss < 10 ? '0' : '') + ss; }
 
 function resetar() {
@@ -572,7 +572,7 @@ function atualizarBoss(dt) {
         estado = 'vitoria'; tempoFinal = tempo;             // guarda o tempo total da partida
         if (melhorTempo <= 0 || tempoFinal < melhorTempo) {
           melhorTempo = tempoFinal;
-          localStorage.setItem('fagulha_melhor_tempo', String(melhorTempo));
+          localStorage.setItem('fagulha-melhor-tempo', String(melhorTempo));
         }
       }   // no 3º dash o chefão cai
     } else if (dashT <= 0 && invenc <= 0) levarDano(null);
